@@ -1,6 +1,7 @@
-import { Menu, Plus, Wifi } from "lucide-react";
+import { Menu, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Link } from "react-router-dom";
+import fadyLogo from "@/assets/fady-logo.jpeg";
 
 const Navbar = () => {
   return (
@@ -8,10 +9,7 @@ const Navbar = () => {
       <div className="container flex h-16 items-center justify-between">
         <div className="flex items-center gap-6">
           <Link to="/" className="flex items-center space-x-2">
-            <div className="h-9 w-9 rounded-lg bg-primary flex items-center justify-center">
-              <Wifi className="h-5 w-5 text-primary-foreground" />
-            </div>
-            <span className="text-xl font-bold">NetShop</span>
+            <img src={fadyLogo} alt="Fady Technologies" className="h-10 w-auto" />
           </Link>
           
           <nav className="hidden md:flex items-center gap-6">
