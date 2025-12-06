@@ -1,9 +1,9 @@
 import { useParams, Link } from "react-router-dom";
-import { MapPin, Clock, Share2, Heart, Phone, Mail } from "lucide-react";
+import { MapPin, Clock, Share2, Heart, Phone, Mail, Shield, Truck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import Navbar from "@/components/Navbar";
-import phoneImage from "@/assets/product-phone.jpg";
+import routerImage from "@/assets/product-router.jpg";
 
 const ProductDetail = () => {
   const { id } = useParams();
@@ -18,6 +18,8 @@ const ProductDetail = () => {
             Home
           </Link>
           <span className="mx-2 text-muted-foreground">/</span>
+          <span className="text-sm text-muted-foreground">Routers</span>
+          <span className="mx-2 text-muted-foreground">/</span>
           <span className="text-sm">Product Details</span>
         </div>
 
@@ -25,18 +27,18 @@ const ProductDetail = () => {
           <div className="lg:col-span-2 space-y-6">
             <Card>
               <CardContent className="p-0">
-                <div className="aspect-video overflow-hidden rounded-t-lg">
+                <div className="aspect-video overflow-hidden rounded-t-lg bg-secondary">
                   <img 
-                    src={phoneImage} 
-                    alt="Product" 
-                    className="w-full h-full object-cover"
+                    src={routerImage} 
+                    alt="Cisco ISR 4321 Router" 
+                    className="w-full h-full object-contain"
                   />
                 </div>
                 <div className="p-6 space-y-4">
                   <div className="flex items-start justify-between">
                     <div>
                       <h1 className="text-3xl font-bold mb-2">
-                        iPhone 14 Pro Max - 256GB, Excellent Condition
+                        Cisco ISR 4321 Router - Enterprise Grade
                       </h1>
                       <div className="flex items-center gap-4 text-sm text-muted-foreground">
                         <div className="flex items-center gap-1">
@@ -59,16 +61,16 @@ const ProductDetail = () => {
                     </div>
                   </div>
 
-                  <div className="text-4xl font-bold text-primary">$899</div>
+                  <div className="text-4xl font-bold text-primary">$1,299</div>
 
                   <div className="border-t pt-4">
                     <h2 className="text-xl font-semibold mb-3">Description</h2>
                     <p className="text-muted-foreground leading-relaxed">
-                      Selling my iPhone 14 Pro Max in excellent condition. The phone has been well 
-                      maintained with minimal signs of use. It comes with the original box, charger, 
-                      and a protective case. Battery health is at 95%. No scratches on the screen, 
-                      and the device is fully functional. Perfect for anyone looking for a premium 
-                      smartphone at a great price.
+                      Selling a Cisco ISR 4321 Integrated Services Router in excellent working condition. 
+                      This enterprise-grade router supports up to 50 Mbps aggregate throughput and includes 
+                      2 onboard GE, 2 NIM slots, and 4 GB Flash Memory. Perfect for small to medium business 
+                      networks. Comes with power cable and console cable. Factory reset and ready for 
+                      configuration. Warranty available.
                     </p>
                   </div>
 
@@ -76,20 +78,28 @@ const ProductDetail = () => {
                     <h2 className="text-xl font-semibold mb-3">Specifications</h2>
                     <div className="grid sm:grid-cols-2 gap-3">
                       <div className="flex justify-between py-2 border-b">
-                        <span className="text-muted-foreground">Storage</span>
-                        <span className="font-medium">256GB</span>
+                        <span className="text-muted-foreground">Brand</span>
+                        <span className="font-medium">Cisco</span>
+                      </div>
+                      <div className="flex justify-between py-2 border-b">
+                        <span className="text-muted-foreground">Model</span>
+                        <span className="font-medium">ISR 4321</span>
+                      </div>
+                      <div className="flex justify-between py-2 border-b">
+                        <span className="text-muted-foreground">Ports</span>
+                        <span className="font-medium">2x GE WAN/LAN</span>
+                      </div>
+                      <div className="flex justify-between py-2 border-b">
+                        <span className="text-muted-foreground">Memory</span>
+                        <span className="font-medium">4 GB Flash</span>
+                      </div>
+                      <div className="flex justify-between py-2 border-b">
+                        <span className="text-muted-foreground">Throughput</span>
+                        <span className="font-medium">50 Mbps</span>
                       </div>
                       <div className="flex justify-between py-2 border-b">
                         <span className="text-muted-foreground">Condition</span>
                         <span className="font-medium">Excellent</span>
-                      </div>
-                      <div className="flex justify-between py-2 border-b">
-                        <span className="text-muted-foreground">Color</span>
-                        <span className="font-medium">Deep Purple</span>
-                      </div>
-                      <div className="flex justify-between py-2 border-b">
-                        <span className="text-muted-foreground">Battery</span>
-                        <span className="font-medium">95%</span>
                       </div>
                     </div>
                   </div>
@@ -104,11 +114,11 @@ const ProductDetail = () => {
                 <h3 className="text-xl font-semibold">Seller Information</h3>
                 <div className="flex items-center gap-3">
                   <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center">
-                    <span className="text-lg font-semibold text-primary">JS</span>
+                    <span className="text-lg font-semibold text-primary">NT</span>
                   </div>
                   <div>
-                    <p className="font-semibold">John Smith</p>
-                    <p className="text-sm text-muted-foreground">Member since 2023</p>
+                    <p className="font-semibold">NetTech Solutions</p>
+                    <p className="text-sm text-muted-foreground">Verified Seller • Since 2021</p>
                   </div>
                 </div>
                 <div className="space-y-2 pt-4">
@@ -124,15 +134,42 @@ const ProductDetail = () => {
               </CardContent>
             </Card>
 
+            <Card className="border-accent/30 bg-accent/5">
+              <CardContent className="p-6 space-y-3">
+                <div className="flex items-center gap-2">
+                  <Shield className="h-5 w-5 text-accent" />
+                  <h3 className="font-semibold">Buyer Protection</h3>
+                </div>
+                <ul className="space-y-2 text-sm text-muted-foreground">
+                  <li className="flex items-center gap-2">
+                    <span className="h-1.5 w-1.5 rounded-full bg-accent" />
+                    Test equipment before purchase
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <span className="h-1.5 w-1.5 rounded-full bg-accent" />
+                    Verify serial numbers
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <span className="h-1.5 w-1.5 rounded-full bg-accent" />
+                    Request warranty documentation
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <span className="h-1.5 w-1.5 rounded-full bg-accent" />
+                    Meet in public locations
+                  </li>
+                </ul>
+              </CardContent>
+            </Card>
+
             <Card>
               <CardContent className="p-6 space-y-3">
-                <h3 className="font-semibold">Safety Tips</h3>
-                <ul className="space-y-2 text-sm text-muted-foreground">
-                  <li>• Meet in a safe, public location</li>
-                  <li>• Check the item before payment</li>
-                  <li>• Pay only after collecting item</li>
-                  <li>• Report suspicious ads</li>
-                </ul>
+                <div className="flex items-center gap-2">
+                  <Truck className="h-5 w-5 text-primary" />
+                  <h3 className="font-semibold">Shipping Available</h3>
+                </div>
+                <p className="text-sm text-muted-foreground">
+                  Seller offers nationwide shipping. Contact for shipping rates.
+                </p>
               </CardContent>
             </Card>
           </div>
