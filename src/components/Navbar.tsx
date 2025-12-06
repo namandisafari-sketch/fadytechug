@@ -5,11 +5,11 @@ import fadyLogo from "@/assets/fady-logo.png";
 
 const Navbar = () => {
   return (
-    <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-      <div className="container flex h-16 items-center justify-between">
+    <header className="sticky top-0 z-50 w-full border-b bg-background/80 backdrop-blur-md supports-[backdrop-filter]:bg-background/60">
+      <div className="container flex h-20 items-center justify-between">
         <div className="flex items-center gap-6">
           <Link to="/" className="flex items-center space-x-2">
-            <img src={fadyLogo} alt="Fady Technologies" className="h-10 w-auto" />
+            <img src={fadyLogo} alt="Fady Technologies" className="h-16 w-auto" />
           </Link>
           
           <nav className="hidden md:flex items-center gap-6">
