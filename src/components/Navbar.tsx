@@ -1,7 +1,7 @@
 import { Menu, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Link } from "react-router-dom";
-import fadyLogo from "@/assets/fady-logo.jpeg";
+import fadyLogo from "@/assets/fady-logo.png";
 
 const Navbar = () => {
   return (
