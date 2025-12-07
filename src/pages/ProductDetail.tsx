@@ -1,15 +1,17 @@
 import { useParams, Link } from "react-router-dom";
-import { Share2, Heart, Shield, Truck, Package, CheckCircle } from "lucide-react";
+import { Share2, Heart, Shield, Truck, Package, CheckCircle, ShoppingCart } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import Navbar from "@/components/Navbar";
 import InquiryForm from "@/components/InquiryForm";
 import { getProductById } from "@/data/products";
+import { useCart } from "@/contexts/CartContext";
 
 const ProductDetail = () => {
   const { id } = useParams();
   const product = getProductById(id || "");
+  const { addToCart } = useCart();
 
   if (!product) {
     return (
@@ -82,7 +84,15 @@ const ProductDetail = () => {
                     </div>
                   </div>
 
-                  <div className="text-4xl font-bold text-primary">{product.price}</div>
+                  <div className="flex items-center gap-4">
+                    <span className="text-4xl font-bold text-primary">{product.price}</span>
+                    {product.inStock && (
+                      <Button size="lg" className="gap-2" onClick={() => addToCart(product)}>
+                        <ShoppingCart className="h-5 w-5" />
+                        Add to Cart
+                      </Button>
+                    )}
+                  </div>
 
                   <div className="border-t pt-4">
                     <h2 className="text-xl font-semibold mb-3">Description</h2>
