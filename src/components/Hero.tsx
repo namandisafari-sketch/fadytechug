@@ -19,14 +19,14 @@ const Hero = () => {
         <div className="flex flex-col items-center text-center space-y-8">
           <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/10 backdrop-blur text-white/90 text-sm font-medium">
             <span className="h-2 w-2 rounded-full bg-accent animate-pulse" />
-            Trusted Network Equipment Marketplace
+            Quality Network Equipment Store
           </div>
           
           <h1 className="text-4xl md:text-6xl font-bold text-white max-w-4xl leading-tight">
-            Buy & Sell Network Equipment
+            Professional Network Equipment
           </h1>
           <p className="text-xl text-white/90 max-w-2xl">
-            Routers, switches, cables, servers, and more from verified sellers
+            Shop routers, switches, cables, servers, and more with expert support
           </p>
           
           <div className="w-full max-w-2xl flex gap-2">
