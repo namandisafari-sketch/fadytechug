@@ -1,3 +1,4 @@
+// Cart context for managing shopping cart state
 import { createContext, useContext, useState, ReactNode } from "react";
 import { Product } from "@/data/products";
 
