@@ -1,17 +1,15 @@
 import { useParams, Link } from "react-router-dom";
-import { Share2, Heart, Shield, Truck, Package, CheckCircle, ShoppingCart } from "lucide-react";
+import { Share2, Heart, Shield, Truck, Package, CheckCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import Navbar from "@/components/Navbar";
 import InquiryForm from "@/components/InquiryForm";
 import { getProductById } from "@/data/products";
-import { useCart } from "@/contexts/CartContext";
 
 const ProductDetail = () => {
   const { id } = useParams();
   const product = getProductById(id || "");
-  const { addToCart } = useCart();
 
   if (!product) {
     return (
@@ -70,9 +68,7 @@ const ProductDetail = () => {
                           </Badge>
                         )}
                       </div>
-                      <h1 className="text-3xl font-bold mb-2">
-                        {product.title}
-                      </h1>
+                      <h1 className="text-3xl font-bold mb-2">{product.title}</h1>
                     </div>
                     <div className="flex gap-2">
                       <Button variant="outline" size="icon">
@@ -84,21 +80,11 @@ const ProductDetail = () => {
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-4">
-                    <span className="text-4xl font-bold text-primary">{product.price}</span>
-                    {product.inStock && (
-                      <Button size="lg" className="gap-2" onClick={() => addToCart(product)}>
-                        <ShoppingCart className="h-5 w-5" />
-                        Add to Cart
-                      </Button>
-                    )}
-                  </div>
+                  <div className="text-4xl font-bold text-primary">{product.price}</div>
 
                   <div className="border-t pt-4">
                     <h2 className="text-xl font-semibold mb-3">Description</h2>
-                    <p className="text-muted-foreground leading-relaxed">
-                      {product.description}
-                    </p>
+                    <p className="text-muted-foreground leading-relaxed">{product.description}</p>
                   </div>
 
                   <div className="border-t pt-4">
@@ -122,7 +108,7 @@ const ProductDetail = () => {
               <CardContent className="p-6 space-y-4">
                 <h3 className="text-xl font-semibold">Inquire About This Product</h3>
                 <p className="text-sm text-muted-foreground">
-                  Interested in this product? Send us a message and we'll get back to you within 24 hours.
+                  Send us a message and we'll get back to you within 24 hours.
                 </p>
                 <InquiryForm productTitle={product.title} productId={product.id} />
               </CardContent>
@@ -147,10 +133,6 @@ const ProductDetail = () => {
                     <span className="h-1.5 w-1.5 rounded-full bg-accent" />
                     Warranty on all items
                   </li>
-                  <li className="flex items-center gap-2">
-                    <span className="h-1.5 w-1.5 rounded-full bg-accent" />
-                    Competitive pricing
-                  </li>
                 </ul>
               </CardContent>
             </Card>
@@ -162,19 +144,7 @@ const ProductDetail = () => {
                   <h3 className="font-semibold">Shipping Available</h3>
                 </div>
                 <p className="text-sm text-muted-foreground">
-                  We offer nationwide shipping. Contact us for shipping rates and delivery times.
-                </p>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardContent className="p-6 space-y-3">
-                <div className="flex items-center gap-2">
-                  <Package className="h-5 w-5 text-primary" />
-                  <h3 className="font-semibold">Bulk Orders</h3>
-                </div>
-                <p className="text-sm text-muted-foreground">
-                  Need multiple units? Contact us for bulk pricing and enterprise solutions.
+                  We offer nationwide shipping. Contact us for rates.
                 </p>
               </CardContent>
             </Card>
