@@ -26,6 +26,11 @@ const Navbar = () => {
         </div>
 
         <div className="flex items-center gap-4">
+          <Link to="/admin">
+            <Button variant="outline" size="sm">
+              Admin Panel
+            </Button>
+          </Link>
           <Button variant="ghost" size="icon" className="md:hidden">
             <Menu className="h-5 w-5" />
           </Button>
