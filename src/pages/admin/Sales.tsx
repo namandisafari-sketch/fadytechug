@@ -12,8 +12,9 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
-import { Receipt, Search, Eye, Printer, DollarSign, TrendingUp, RotateCcw, Ban } from 'lucide-react';
+import { Receipt, Search, Eye, Printer, DollarSign, TrendingUp, RotateCcw, Ban, ScanLine } from 'lucide-react';
 import { formatCurrency } from '@/lib/currency';
+import BarcodeScanner from '@/components/BarcodeScanner';
 
 interface Sale {
   id: string;
@@ -65,6 +66,9 @@ const Sales = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [dateFilter, setDateFilter] = useState('');
   const [loading, setLoading] = useState(true);
+  
+  // Scanner state
+  const [scannerOpen, setScannerOpen] = useState(false);
   
   // Refund state
   const [refundDialogOpen, setRefundDialogOpen] = useState(false);
@@ -316,6 +320,29 @@ const Sales = () => {
     }
   };
 
+  const handleBarcodeScan = async (code: string) => {
+    // Search for receipt by scanned code
+    setSearchTerm(code);
+    
+    // Try to find exact match and open details
+    const { data, error } = await supabase
+      .from('sales')
+      .select('*')
+      .eq('receipt_number', code)
+      .maybeSingle();
+    
+    if (data) {
+      viewSaleDetails(data);
+      toast({ title: 'Receipt Found', description: `Found receipt ${code}` });
+    } else {
+      toast({ 
+        title: 'Not Found', 
+        description: `No receipt found with number: ${code}`, 
+        variant: 'destructive' 
+      });
+    }
+  };
+
   const filteredSales = sales.filter(s => 
     s.receipt_number.toLowerCase().includes(searchTerm.toLowerCase()) ||
     (s.customer_name?.toLowerCase() || '').includes(searchTerm.toLowerCase())
@@ -412,6 +439,10 @@ const Sales = () => {
             className="pl-10"
           />
         </div>
+        <Button variant="outline" onClick={() => setScannerOpen(true)} className="gap-2">
+          <ScanLine className="h-4 w-4" />
+          Scan Receipt
+        </Button>
         <Input
           type="date"
           value={dateFilter}
@@ -759,6 +790,13 @@ const Sales = () => {
           )}
         </DialogContent>
       </Dialog>
+
+      {/* Barcode Scanner */}
+      <BarcodeScanner 
+        open={scannerOpen} 
+        onClose={() => setScannerOpen(false)} 
+        onScan={handleBarcodeScan}
+      />
     </div>
   );
 };
