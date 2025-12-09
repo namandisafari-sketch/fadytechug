@@ -287,47 +287,83 @@ export type Database = {
         Row: {
           barcode: string | null
           category: string
+          condition: string | null
           created_at: string
           created_by: string | null
           description: string | null
+          dimensions: string | null
           id: string
           image_url: string | null
           is_active: boolean | null
           is_featured: boolean | null
+          location: string | null
+          manufacturer: string | null
+          model: string | null
           name: string
           price: number
+          reorder_level: number | null
+          reorder_quantity: number | null
+          serial_numbers: string[] | null
+          sku: string | null
           stock_quantity: number
+          unit_cost: number | null
           updated_at: string
+          warranty_months: number | null
+          weight_kg: number | null
         }
         Insert: {
           barcode?: string | null
           category: string
+          condition?: string | null
           created_at?: string
           created_by?: string | null
           description?: string | null
+          dimensions?: string | null
           id?: string
           image_url?: string | null
           is_active?: boolean | null
           is_featured?: boolean | null
+          location?: string | null
+          manufacturer?: string | null
+          model?: string | null
           name: string
           price: number
+          reorder_level?: number | null
+          reorder_quantity?: number | null
+          serial_numbers?: string[] | null
+          sku?: string | null
           stock_quantity?: number
+          unit_cost?: number | null
           updated_at?: string
+          warranty_months?: number | null
+          weight_kg?: number | null
         }
         Update: {
           barcode?: string | null
           category?: string
+          condition?: string | null
           created_at?: string
           created_by?: string | null
           description?: string | null
+          dimensions?: string | null
           id?: string
           image_url?: string | null
           is_active?: boolean | null
           is_featured?: boolean | null
+          location?: string | null
+          manufacturer?: string | null
+          model?: string | null
           name?: string
           price?: number
+          reorder_level?: number | null
+          reorder_quantity?: number | null
+          serial_numbers?: string[] | null
+          sku?: string | null
           stock_quantity?: number
+          unit_cost?: number | null
           updated_at?: string
+          warranty_months?: number | null
+          weight_kg?: number | null
         }
         Relationships: []
       }

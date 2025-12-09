@@ -29,6 +29,19 @@ interface Product {
   description: string | null;
   image_url: string | null;
   is_active: boolean;
+  barcode: string | null;
+  model: string | null;
+  manufacturer: string | null;
+  sku: string | null;
+  reorder_level: number | null;
+  reorder_quantity: number | null;
+  location: string | null;
+  condition: string | null;
+  serial_numbers: string[] | null;
+  warranty_months: number | null;
+  unit_cost: number | null;
+  weight_kg: number | null;
+  dimensions: string | null;
 }
 
 interface InventoryTransaction {
@@ -514,64 +527,103 @@ const Inventory = () => {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Product</TableHead>
-                    <TableHead>Category</TableHead>
-                    <TableHead className="text-right">Stock</TableHead>
-                    <TableHead className="text-right">Value</TableHead>
-                    <TableHead>Stock Level</TableHead>
-                    <TableHead>Status</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filteredProducts.map(product => {
-                    const stockPercent = Math.min((product.stock_quantity / 50) * 100, 100);
-                    const isLow = product.stock_quantity <= lowStockThreshold;
-                    const isReorder = product.stock_quantity <= reorderThreshold && !isLow;
-                    const isOut = product.stock_quantity === 0;
-                    
-                    return (
-                      <TableRow key={product.id}>
-                        <TableCell>
-                          <div className="font-medium">{product.name}</div>
-                          {product.description && (
-                            <p className="text-xs text-muted-foreground truncate max-w-[200px]">{product.description}</p>
-                          )}
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant="outline">{product.category}</Badge>
-                        </TableCell>
-                        <TableCell className="text-right font-mono font-medium">
-                          {product.stock_quantity}
-                        </TableCell>
-                        <TableCell className="text-right">
-                          {formatCurrency(product.price * product.stock_quantity)}
-                        </TableCell>
-                        <TableCell className="w-32">
-                          <Progress 
-                            value={stockPercent} 
-                            className={`h-2 ${isOut ? 'bg-red-200' : isLow ? 'bg-orange-200' : 'bg-gray-200'}`}
-                          />
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant={isOut ? 'destructive' : isLow ? 'secondary' : isReorder ? 'outline' : 'default'}>
-                            {isOut ? 'Out of Stock' : isLow ? 'Low' : isReorder ? 'Reorder' : 'Good'}
-                          </Badge>
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Product</TableHead>
+                      <TableHead>SKU / Model</TableHead>
+                      <TableHead>Manufacturer</TableHead>
+                      <TableHead>Location</TableHead>
+                      <TableHead>Condition</TableHead>
+                      <TableHead className="text-right">Stock</TableHead>
+                      <TableHead className="text-right">Reorder Level</TableHead>
+                      <TableHead className="text-right">Unit Cost</TableHead>
+                      <TableHead className="text-right">Stock Value</TableHead>
+                      <TableHead>Status</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {filteredProducts.map(product => {
+                      const reorderLevel = product.reorder_level ?? lowStockThreshold;
+                      const isLow = product.stock_quantity <= (product.reorder_level ?? lowStockThreshold);
+                      const needsReorder = product.stock_quantity <= (product.reorder_quantity ?? reorderThreshold) && !isLow;
+                      const isOut = product.stock_quantity === 0;
+                      const stockValue = (product.unit_cost ?? product.price) * product.stock_quantity;
+                      
+                      return (
+                        <TableRow key={product.id} className={isOut ? 'bg-red-50 dark:bg-red-950/20' : isLow ? 'bg-orange-50 dark:bg-orange-950/20' : ''}>
+                          <TableCell>
+                            <div className="font-medium">{product.name}</div>
+                            <div className="flex gap-1 mt-1">
+                              <Badge variant="outline" className="text-xs">{product.category}</Badge>
+                              {product.barcode && (
+                                <Badge variant="secondary" className="text-xs font-mono gap-1">
+                                  <Barcode className="h-3 w-3" />{product.barcode}
+                                </Badge>
+                              )}
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <div className="text-sm">
+                              {product.sku && <div className="font-mono">{product.sku}</div>}
+                              {product.model && <div className="text-muted-foreground text-xs">{product.model}</div>}
+                              {!product.sku && !product.model && <span className="text-muted-foreground">—</span>}
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            {product.manufacturer || <span className="text-muted-foreground">—</span>}
+                          </TableCell>
+                          <TableCell>
+                            {product.location ? (
+                              <Badge variant="outline" className="gap-1">
+                                <MapPin className="h-3 w-3" />{product.location}
+                              </Badge>
+                            ) : (
+                              <span className="text-muted-foreground">—</span>
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            {product.condition ? (
+                              <Badge variant={product.condition === 'new' ? 'default' : 'secondary'} className="capitalize">
+                                {product.condition}
+                              </Badge>
+                            ) : (
+                              <span className="text-muted-foreground">—</span>
+                            )}
+                          </TableCell>
+                          <TableCell className="text-right font-mono font-medium">
+                            <span className={isOut ? 'text-red-600' : isLow ? 'text-orange-600' : ''}>
+                              {product.stock_quantity}
+                            </span>
+                          </TableCell>
+                          <TableCell className="text-right font-mono">
+                            {reorderLevel}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            {product.unit_cost ? formatCurrency(product.unit_cost) : <span className="text-muted-foreground">—</span>}
+                          </TableCell>
+                          <TableCell className="text-right font-medium">
+                            {formatCurrency(stockValue)}
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant={isOut ? 'destructive' : isLow ? 'secondary' : needsReorder ? 'outline' : 'default'}>
+                              {isOut ? 'Out of Stock' : isLow ? 'Low' : needsReorder ? 'Reorder' : 'Good'}
+                            </Badge>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                    {filteredProducts.length === 0 && (
+                      <TableRow>
+                        <TableCell colSpan={10} className="text-center text-muted-foreground py-8">
+                          No products found
                         </TableCell>
                       </TableRow>
-                    );
-                  })}
-                  {filteredProducts.length === 0 && (
-                    <TableRow>
-                      <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
-                        No products found
-                      </TableCell>
-                    </TableRow>
-                  )}
-                </TableBody>
-              </Table>
+                    )}
+                  </TableBody>
+                </Table>
+              </div>
             </CardContent>
           </Card>
         </TabsContent>
