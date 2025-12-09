@@ -21,6 +21,8 @@ import Refunds from "./pages/admin/Refunds";
 import Expenses from "./pages/admin/Expenses";
 import Suppliers from "./pages/admin/Suppliers";
 import Banking from "./pages/admin/Banking";
+import PurchaseOrders from "./pages/admin/PurchaseOrders";
+import Reports from "./pages/admin/Reports";
 
 const queryClient = new QueryClient();
 
@@ -45,9 +47,11 @@ function App() {
                 <Route path="inventory" element={<Inventory />} />
                 <Route path="sales" element={<Sales />} />
                 <Route path="refunds" element={<Refunds />} />
+                <Route path="purchase-orders" element={<PurchaseOrders />} />
                 <Route path="expenses" element={<Expenses />} />
                 <Route path="suppliers" element={<Suppliers />} />
                 <Route path="banking" element={<Banking />} />
+                <Route path="reports" element={<Reports />} />
                 <Route path="customers" element={<Customers />} />
                 <Route path="inquiries" element={<Inquiries />} />
                 <Route path="settings" element={<Settings />} />

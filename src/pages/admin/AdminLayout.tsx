@@ -18,7 +18,9 @@ import {
   Wallet,
   Building2,
   RotateCcw,
-  ClipboardList
+  ClipboardList,
+  ShoppingBag,
+  FileText
 } from 'lucide-react';
 import { useState } from 'react';
 import { cn } from '@/lib/utils';
@@ -32,9 +34,11 @@ const navItems = [
   { path: '/admin/inventory', icon: ClipboardList, label: 'Inventory' },
   { path: '/admin/sales', icon: Receipt, label: 'Sales' },
   { path: '/admin/refunds', icon: RotateCcw, label: 'Refunds' },
+  { path: '/admin/purchase-orders', icon: ShoppingBag, label: 'Purchase Orders' },
   { path: '/admin/expenses', icon: Wallet, label: 'Expenses' },
   { path: '/admin/suppliers', icon: Truck, label: 'Suppliers' },
   { path: '/admin/banking', icon: Building2, label: 'Banking' },
+  { path: '/admin/reports', icon: FileText, label: 'Reports' },
   { path: '/admin/customers', icon: Users, label: 'Customers' },
   { path: '/admin/inquiries', icon: MessageSquare, label: 'Inquiries' },
   { path: '/admin/settings', icon: Settings, label: 'Settings' },
@@ -97,7 +101,7 @@ const AdminLayout = () => {
           </div>
 
           {/* Navigation */}
-          <nav className="flex-1 p-4 space-y-2">
+          <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
             {navItems.map((item) => {
               const isActive = item.exact 
                 ? location.pathname === item.path
@@ -109,14 +113,14 @@ const AdminLayout = () => {
                   to={item.path}
                   onClick={() => setSidebarOpen(false)}
                   className={cn(
-                    "flex items-center gap-3 px-4 py-3 rounded-lg transition-colors",
+                    "flex items-center gap-3 px-4 py-2.5 rounded-lg transition-colors",
                     isActive 
                       ? "bg-primary text-primary-foreground" 
                       : "hover:bg-secondary text-foreground"
                   )}
                 >
                   <item.icon className="h-5 w-5" />
-                  <span className="font-medium">{item.label}</span>
+                  <span className="font-medium text-sm">{item.label}</span>
                 </Link>
               );
             })}
