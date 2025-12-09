@@ -11,7 +11,14 @@ import {
   LogOut,
   Menu,
   X,
-  ShieldCheck
+  ShieldCheck,
+  ShoppingCart,
+  Truck,
+  Receipt,
+  Wallet,
+  Building2,
+  RotateCcw,
+  ClipboardList
 } from 'lucide-react';
 import { useState } from 'react';
 import { cn } from '@/lib/utils';
@@ -20,9 +27,16 @@ import { Loader2 } from 'lucide-react';
 
 const navItems = [
   { path: '/admin', icon: LayoutDashboard, label: 'Dashboard', exact: true },
+  { path: '/admin/pos', icon: ShoppingCart, label: 'Point of Sale' },
   { path: '/admin/products', icon: Package, label: 'Products' },
-  { path: '/admin/inquiries', icon: MessageSquare, label: 'Inquiries' },
+  { path: '/admin/inventory', icon: ClipboardList, label: 'Inventory' },
+  { path: '/admin/sales', icon: Receipt, label: 'Sales' },
+  { path: '/admin/refunds', icon: RotateCcw, label: 'Refunds' },
+  { path: '/admin/expenses', icon: Wallet, label: 'Expenses' },
+  { path: '/admin/suppliers', icon: Truck, label: 'Suppliers' },
+  { path: '/admin/banking', icon: Building2, label: 'Banking' },
   { path: '/admin/customers', icon: Users, label: 'Customers' },
+  { path: '/admin/inquiries', icon: MessageSquare, label: 'Inquiries' },
   { path: '/admin/settings', icon: Settings, label: 'Settings' },
 ];
 

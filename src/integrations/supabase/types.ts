@@ -14,6 +14,87 @@ export type Database = {
   }
   public: {
     Tables: {
+      bank_deposits: {
+        Row: {
+          account_number: string | null
+          amount: number
+          bank_name: string
+          created_at: string
+          deposit_date: string
+          deposited_by: string | null
+          id: string
+          notes: string | null
+          reference_number: string | null
+        }
+        Insert: {
+          account_number?: string | null
+          amount: number
+          bank_name: string
+          created_at?: string
+          deposit_date: string
+          deposited_by?: string | null
+          id?: string
+          notes?: string | null
+          reference_number?: string | null
+        }
+        Update: {
+          account_number?: string | null
+          amount?: number
+          bank_name?: string
+          created_at?: string
+          deposit_date?: string
+          deposited_by?: string | null
+          id?: string
+          notes?: string | null
+          reference_number?: string | null
+        }
+        Relationships: []
+      }
+      cash_register: {
+        Row: {
+          closed_by: string | null
+          closing_balance: number | null
+          created_at: string
+          date: string
+          id: string
+          notes: string | null
+          opening_balance: number
+          total_deposits: number | null
+          total_expenses: number | null
+          total_refunds: number | null
+          total_sales: number | null
+          updated_at: string
+        }
+        Insert: {
+          closed_by?: string | null
+          closing_balance?: number | null
+          created_at?: string
+          date: string
+          id?: string
+          notes?: string | null
+          opening_balance?: number
+          total_deposits?: number | null
+          total_expenses?: number | null
+          total_refunds?: number | null
+          total_sales?: number | null
+          updated_at?: string
+        }
+        Update: {
+          closed_by?: string | null
+          closing_balance?: number | null
+          created_at?: string
+          date?: string
+          id?: string
+          notes?: string | null
+          opening_balance?: number
+          total_deposits?: number | null
+          total_expenses?: number | null
+          total_refunds?: number | null
+          total_sales?: number | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       customers: {
         Row: {
           company: string | null
@@ -44,6 +125,45 @@ export type Database = {
           notes?: string | null
           phone?: string | null
           updated_at?: string
+        }
+        Relationships: []
+      }
+      expenses: {
+        Row: {
+          amount: number
+          category: Database["public"]["Enums"]["expense_category"]
+          created_at: string
+          created_by: string | null
+          description: string
+          expense_date: string
+          id: string
+          notes: string | null
+          payment_method: Database["public"]["Enums"]["payment_method"]
+          receipt_url: string | null
+        }
+        Insert: {
+          amount: number
+          category: Database["public"]["Enums"]["expense_category"]
+          created_at?: string
+          created_by?: string | null
+          description: string
+          expense_date?: string
+          id?: string
+          notes?: string | null
+          payment_method?: Database["public"]["Enums"]["payment_method"]
+          receipt_url?: string | null
+        }
+        Update: {
+          amount?: number
+          category?: Database["public"]["Enums"]["expense_category"]
+          created_at?: string
+          created_by?: string | null
+          description?: string
+          expense_date?: string
+          id?: string
+          notes?: string | null
+          payment_method?: Database["public"]["Enums"]["payment_method"]
+          receipt_url?: string | null
         }
         Relationships: []
       }
@@ -106,6 +226,56 @@ export type Database = {
           },
           {
             foreignKeyName: "inquiries_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      inventory_transactions: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          id: string
+          new_stock: number
+          notes: string | null
+          previous_stock: number
+          product_id: string
+          quantity: number
+          reference_id: string | null
+          transaction_type: Database["public"]["Enums"]["transaction_type"]
+          unit_cost: number | null
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          new_stock: number
+          notes?: string | null
+          previous_stock: number
+          product_id: string
+          quantity: number
+          reference_id?: string | null
+          transaction_type: Database["public"]["Enums"]["transaction_type"]
+          unit_cost?: number | null
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          new_stock?: number
+          notes?: string | null
+          previous_stock?: number
+          product_id?: string
+          quantity?: number
+          reference_id?: string | null
+          transaction_type?: Database["public"]["Enums"]["transaction_type"]
+          unit_cost?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "inventory_transactions_product_id_fkey"
             columns: ["product_id"]
             isOneToOne: false
             referencedRelation: "products"
@@ -185,6 +355,288 @@ export type Database = {
         }
         Relationships: []
       }
+      purchase_order_items: {
+        Row: {
+          created_at: string
+          id: string
+          product_id: string
+          purchase_order_id: string
+          quantity: number
+          received_quantity: number | null
+          total_cost: number
+          unit_cost: number
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          product_id: string
+          purchase_order_id: string
+          quantity: number
+          received_quantity?: number | null
+          total_cost: number
+          unit_cost: number
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          product_id?: string
+          purchase_order_id?: string
+          quantity?: number
+          received_quantity?: number | null
+          total_cost?: number
+          unit_cost?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "purchase_order_items_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "purchase_order_items_purchase_order_id_fkey"
+            columns: ["purchase_order_id"]
+            isOneToOne: false
+            referencedRelation: "purchase_orders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      purchase_orders: {
+        Row: {
+          created_at: string
+          id: string
+          notes: string | null
+          order_number: string
+          ordered_by: string | null
+          received_at: string | null
+          status: string
+          supplier_id: string
+          total_amount: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          notes?: string | null
+          order_number: string
+          ordered_by?: string | null
+          received_at?: string | null
+          status?: string
+          supplier_id: string
+          total_amount?: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          notes?: string | null
+          order_number?: string
+          ordered_by?: string | null
+          received_at?: string | null
+          status?: string
+          supplier_id?: string
+          total_amount?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "purchase_orders_supplier_id_fkey"
+            columns: ["supplier_id"]
+            isOneToOne: false
+            referencedRelation: "suppliers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      refunds: {
+        Row: {
+          amount: number
+          created_at: string
+          id: string
+          items_returned: Json | null
+          reason: string
+          receipt_number: string
+          refunded_by: string | null
+          sale_id: string | null
+        }
+        Insert: {
+          amount: number
+          created_at?: string
+          id?: string
+          items_returned?: Json | null
+          reason: string
+          receipt_number: string
+          refunded_by?: string | null
+          sale_id?: string | null
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          id?: string
+          items_returned?: Json | null
+          reason?: string
+          receipt_number?: string
+          refunded_by?: string | null
+          sale_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "refunds_sale_id_fkey"
+            columns: ["sale_id"]
+            isOneToOne: false
+            referencedRelation: "sales"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      sale_items: {
+        Row: {
+          created_at: string
+          id: string
+          product_id: string
+          product_name: string
+          quantity: number
+          sale_id: string
+          total_price: number
+          unit_price: number
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          product_id: string
+          product_name: string
+          quantity: number
+          sale_id: string
+          total_price: number
+          unit_price: number
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          product_id?: string
+          product_name?: string
+          quantity?: number
+          sale_id?: string
+          total_price?: number
+          unit_price?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sale_items_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sale_items_sale_id_fkey"
+            columns: ["sale_id"]
+            isOneToOne: false
+            referencedRelation: "sales"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      sales: {
+        Row: {
+          amount_paid: number
+          change_given: number | null
+          created_at: string
+          customer_id: string | null
+          customer_name: string | null
+          discount: number | null
+          id: string
+          notes: string | null
+          payment_method: Database["public"]["Enums"]["payment_method"]
+          receipt_number: string
+          sold_by: string | null
+          subtotal: number
+          tax: number | null
+          total: number
+        }
+        Insert: {
+          amount_paid?: number
+          change_given?: number | null
+          created_at?: string
+          customer_id?: string | null
+          customer_name?: string | null
+          discount?: number | null
+          id?: string
+          notes?: string | null
+          payment_method?: Database["public"]["Enums"]["payment_method"]
+          receipt_number: string
+          sold_by?: string | null
+          subtotal?: number
+          tax?: number | null
+          total?: number
+        }
+        Update: {
+          amount_paid?: number
+          change_given?: number | null
+          created_at?: string
+          customer_id?: string | null
+          customer_name?: string | null
+          discount?: number | null
+          id?: string
+          notes?: string | null
+          payment_method?: Database["public"]["Enums"]["payment_method"]
+          receipt_number?: string
+          sold_by?: string | null
+          subtotal?: number
+          tax?: number | null
+          total?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sales_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      suppliers: {
+        Row: {
+          address: string | null
+          contact_person: string | null
+          created_at: string
+          email: string | null
+          id: string
+          is_active: boolean | null
+          name: string
+          notes: string | null
+          phone: string | null
+          updated_at: string
+        }
+        Insert: {
+          address?: string | null
+          contact_person?: string | null
+          created_at?: string
+          email?: string | null
+          id?: string
+          is_active?: boolean | null
+          name: string
+          notes?: string | null
+          phone?: string | null
+          updated_at?: string
+        }
+        Update: {
+          address?: string | null
+          contact_person?: string | null
+          created_at?: string
+          email?: string | null
+          id?: string
+          is_active?: boolean | null
+          name?: string
+          notes?: string | null
+          phone?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       user_roles: {
         Row: {
           created_at: string
@@ -211,6 +663,8 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      generate_order_number: { Args: never; Returns: string }
+      generate_receipt_number: { Args: never; Returns: string }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
@@ -222,6 +676,22 @@ export type Database = {
     }
     Enums: {
       app_role: "admin" | "staff"
+      expense_category:
+        | "utilities"
+        | "rent"
+        | "salaries"
+        | "supplies"
+        | "transport"
+        | "marketing"
+        | "maintenance"
+        | "other"
+      payment_method:
+        | "cash"
+        | "card"
+        | "mobile_money"
+        | "bank_transfer"
+        | "credit"
+      transaction_type: "sale" | "purchase" | "adjustment" | "return" | "damage"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -350,6 +820,24 @@ export const Constants = {
   public: {
     Enums: {
       app_role: ["admin", "staff"],
+      expense_category: [
+        "utilities",
+        "rent",
+        "salaries",
+        "supplies",
+        "transport",
+        "marketing",
+        "maintenance",
+        "other",
+      ],
+      payment_method: [
+        "cash",
+        "card",
+        "mobile_money",
+        "bank_transfer",
+        "credit",
+      ],
+      transaction_type: ["sale", "purchase", "adjustment", "return", "damage"],
     },
   },
 } as const

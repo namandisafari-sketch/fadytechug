@@ -14,6 +14,13 @@ import Products from "./pages/admin/Products";
 import Inquiries from "./pages/admin/Inquiries";
 import Customers from "./pages/admin/Customers";
 import Settings from "./pages/admin/Settings";
+import PointOfSale from "./pages/admin/PointOfSale";
+import Inventory from "./pages/admin/Inventory";
+import Sales from "./pages/admin/Sales";
+import Refunds from "./pages/admin/Refunds";
+import Expenses from "./pages/admin/Expenses";
+import Suppliers from "./pages/admin/Suppliers";
+import Banking from "./pages/admin/Banking";
 
 const queryClient = new QueryClient();
 
@@ -33,9 +40,16 @@ function App() {
               {/* Admin Routes */}
               <Route path="/admin" element={<AdminLayout />}>
                 <Route index element={<Dashboard />} />
+                <Route path="pos" element={<PointOfSale />} />
                 <Route path="products" element={<Products />} />
-                <Route path="inquiries" element={<Inquiries />} />
+                <Route path="inventory" element={<Inventory />} />
+                <Route path="sales" element={<Sales />} />
+                <Route path="refunds" element={<Refunds />} />
+                <Route path="expenses" element={<Expenses />} />
+                <Route path="suppliers" element={<Suppliers />} />
+                <Route path="banking" element={<Banking />} />
                 <Route path="customers" element={<Customers />} />
+                <Route path="inquiries" element={<Inquiries />} />
                 <Route path="settings" element={<Settings />} />
               </Route>
               
