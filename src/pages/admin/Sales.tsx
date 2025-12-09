@@ -2,12 +2,17 @@ import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
-import { Receipt, Search, Eye, Printer, DollarSign, TrendingUp } from 'lucide-react';
+import { useAuth } from '@/hooks/useAuth';
+import { Receipt, Search, Eye, Printer, DollarSign, TrendingUp, RotateCcw, Ban } from 'lucide-react';
 import { formatCurrency } from '@/lib/currency';
 
 interface Sale {
@@ -25,23 +30,54 @@ interface Sale {
 
 interface SaleItem {
   id: string;
+  product_id: string;
   product_name: string;
   quantity: number;
   unit_price: number;
   total_price: number;
 }
 
+interface RefundItem {
+  product_id: string;
+  product_name: string;
+  quantity: number;
+  refund_qty: number;
+  unit_price: number;
+}
+
+interface Refund {
+  id: string;
+  receipt_number: string;
+  reason: string;
+  amount: number;
+  items_returned: any;
+  created_at: string;
+  sales: { customer_name: string | null } | null;
+}
+
 const Sales = () => {
+  const { user } = useAuth();
   const { toast } = useToast();
   const [sales, setSales] = useState<Sale[]>([]);
+  const [refunds, setRefunds] = useState<Refund[]>([]);
   const [selectedSale, setSelectedSale] = useState<Sale | null>(null);
   const [saleItems, setSaleItems] = useState<SaleItem[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [dateFilter, setDateFilter] = useState('');
   const [loading, setLoading] = useState(true);
+  
+  // Refund state
+  const [refundDialogOpen, setRefundDialogOpen] = useState(false);
+  const [refundSale, setRefundSale] = useState<Sale | null>(null);
+  const [refundItems, setRefundItems] = useState<RefundItem[]>([]);
+  const [refundType, setRefundType] = useState<'full' | 'partial'>('full');
+  const [customAmount, setCustomAmount] = useState('');
+  const [reason, setReason] = useState('');
+  const [processingRefund, setProcessingRefund] = useState(false);
 
   useEffect(() => {
     fetchSales();
+    fetchRefunds();
   }, [dateFilter]);
 
   const fetchSales = async () => {
@@ -72,6 +108,15 @@ const Sales = () => {
     setLoading(false);
   };
 
+  const fetchRefunds = async () => {
+    const { data, error } = await supabase
+      .from('refunds')
+      .select('*, sales(customer_name)')
+      .order('created_at', { ascending: false });
+
+    if (!error) setRefunds(data || []);
+  };
+
   const viewSaleDetails = async (sale: Sale) => {
     setSelectedSale(sale);
     
@@ -83,9 +128,201 @@ const Sales = () => {
     setSaleItems(data || []);
   };
 
+  const openRefundDialog = async (sale: Sale) => {
+    setRefundSale(sale);
+    
+    const { data } = await supabase
+      .from('sale_items')
+      .select('*')
+      .eq('sale_id', sale.id);
+
+    const items = data || [];
+    setRefundItems(items.map((item: SaleItem) => ({
+      product_id: item.product_id,
+      product_name: item.product_name,
+      quantity: item.quantity,
+      refund_qty: item.quantity,
+      unit_price: item.unit_price
+    })));
+    setRefundType('full');
+    setCustomAmount('');
+    setReason('');
+    setRefundDialogOpen(true);
+  };
+
+  const calculateRefundAmount = (): number => {
+    if (refundType === 'full' && refundSale) {
+      return refundSale.total;
+    }
+    
+    if (customAmount) {
+      return parseFloat(customAmount);
+    }
+    
+    return refundItems.reduce((sum, item) => sum + (item.refund_qty * item.unit_price), 0);
+  };
+
+  const updateItemRefundQty = (index: number, qty: number) => {
+    const newItems = [...refundItems];
+    newItems[index].refund_qty = Math.min(Math.max(0, qty), newItems[index].quantity);
+    setRefundItems(newItems);
+  };
+
+  const processRefund = async () => {
+    if (!refundSale || !reason) {
+      toast({ title: 'Error', description: 'Please provide a reason', variant: 'destructive' });
+      return;
+    }
+
+    const amount = calculateRefundAmount();
+    if (amount <= 0 || amount > refundSale.total) {
+      toast({ title: 'Error', description: 'Invalid refund amount', variant: 'destructive' });
+      return;
+    }
+
+    setProcessingRefund(true);
+
+    try {
+      const itemsReturned = refundType === 'full' 
+        ? refundItems.map(i => ({ product_id: i.product_id, product_name: i.product_name, quantity: i.quantity }))
+        : refundItems.filter(i => i.refund_qty > 0).map(i => ({ 
+            product_id: i.product_id, 
+            product_name: i.product_name, 
+            quantity: i.refund_qty 
+          }));
+
+      const { error } = await supabase
+        .from('refunds')
+        .insert({
+          sale_id: refundSale.id,
+          receipt_number: refundSale.receipt_number,
+          reason,
+          amount,
+          items_returned: itemsReturned,
+          refunded_by: user?.id
+        });
+
+      if (error) throw error;
+
+      // Update inventory - add back refunded items
+      for (const item of itemsReturned) {
+        const { data: product } = await supabase
+          .from('products')
+          .select('stock_quantity')
+          .eq('id', item.product_id)
+          .single();
+
+        if (product) {
+          const newStock = product.stock_quantity + item.quantity;
+          await supabase
+            .from('products')
+            .update({ stock_quantity: newStock })
+            .eq('id', item.product_id);
+
+          await supabase.from('inventory_transactions').insert({
+            product_id: item.product_id,
+            transaction_type: 'return',
+            quantity: item.quantity,
+            previous_stock: product.stock_quantity,
+            new_stock: newStock,
+            notes: `Refund from ${refundSale.receipt_number}`,
+            created_by: user?.id
+          });
+        }
+      }
+
+      toast({ title: 'Success', description: 'Refund processed successfully' });
+      setRefundDialogOpen(false);
+      setRefundSale(null);
+      setReason('');
+      setRefundItems([]);
+      setCustomAmount('');
+      fetchRefunds();
+
+    } catch (error: any) {
+      toast({ title: 'Error', description: error.message, variant: 'destructive' });
+    } finally {
+      setProcessingRefund(false);
+    }
+  };
+
+  const voidReceipt = async (sale: Sale) => {
+    if (!confirm(`Are you sure you want to void receipt ${sale.receipt_number}? This will process a full refund.`)) {
+      return;
+    }
+
+    setProcessingRefund(true);
+
+    try {
+      const { data: items } = await supabase
+        .from('sale_items')
+        .select('*')
+        .eq('sale_id', sale.id);
+
+      const saleItemsList = items || [];
+      const itemsReturned = saleItemsList.map((item: SaleItem) => ({
+        product_id: item.product_id,
+        product_name: item.product_name,
+        quantity: item.quantity
+      }));
+
+      const { error } = await supabase
+        .from('refunds')
+        .insert({
+          sale_id: sale.id,
+          receipt_number: sale.receipt_number,
+          reason: 'Receipt voided',
+          amount: sale.total,
+          items_returned: itemsReturned,
+          refunded_by: user?.id
+        });
+
+      if (error) throw error;
+
+      // Update inventory - add back all items
+      for (const item of saleItemsList) {
+        const { data: product } = await supabase
+          .from('products')
+          .select('stock_quantity')
+          .eq('id', item.product_id)
+          .single();
+
+        if (product) {
+          const newStock = product.stock_quantity + item.quantity;
+          await supabase
+            .from('products')
+            .update({ stock_quantity: newStock })
+            .eq('id', item.product_id);
+
+          await supabase.from('inventory_transactions').insert({
+            product_id: item.product_id,
+            transaction_type: 'return',
+            quantity: item.quantity,
+            previous_stock: product.stock_quantity,
+            new_stock: newStock,
+            notes: `Voided receipt ${sale.receipt_number}`,
+            created_by: user?.id
+          });
+        }
+      }
+
+      toast({ title: 'Success', description: 'Receipt voided successfully' });
+      fetchRefunds();
+
+    } catch (error: any) {
+      toast({ title: 'Error', description: error.message, variant: 'destructive' });
+    } finally {
+      setProcessingRefund(false);
+    }
+  };
+
   const filteredSales = sales.filter(s => 
     s.receipt_number.toLowerCase().includes(searchTerm.toLowerCase()) ||
     (s.customer_name?.toLowerCase() || '').includes(searchTerm.toLowerCase())
+  );
+
+  const filteredRefunds = refunds.filter(r =>
+    r.receipt_number.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   const todaySales = sales.filter(s => {
@@ -95,20 +332,22 @@ const Sales = () => {
 
   const todayTotal = todaySales.reduce((sum, s) => sum + s.total, 0);
   const totalSales = sales.reduce((sum, s) => sum + s.total, 0);
+  const totalRefunds = refunds.reduce((sum, r) => sum + r.amount, 0);
+  const refundAmount = calculateRefundAmount();
 
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold text-foreground">Sales</h1>
-        <p className="text-muted-foreground">View and manage sales records</p>
+        <h1 className="text-3xl font-bold text-foreground">Sales & Refunds</h1>
+        <p className="text-muted-foreground">View sales records, process refunds and void receipts</p>
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <Card>
           <CardContent className="pt-6">
             <div className="flex items-center gap-4">
-              <div className="p-3 bg-green-100 rounded-lg">
+              <div className="p-3 bg-green-100 dark:bg-green-900/30 rounded-lg">
                 <DollarSign className="h-6 w-6 text-green-600" />
               </div>
               <div>
@@ -122,7 +361,7 @@ const Sales = () => {
         <Card>
           <CardContent className="pt-6">
             <div className="flex items-center gap-4">
-              <div className="p-3 bg-blue-100 rounded-lg">
+              <div className="p-3 bg-blue-100 dark:bg-blue-900/30 rounded-lg">
                 <Receipt className="h-6 w-6 text-blue-600" />
               </div>
               <div>
@@ -136,12 +375,26 @@ const Sales = () => {
         <Card>
           <CardContent className="pt-6">
             <div className="flex items-center gap-4">
-              <div className="p-3 bg-purple-100 rounded-lg">
+              <div className="p-3 bg-purple-100 dark:bg-purple-900/30 rounded-lg">
                 <TrendingUp className="h-6 w-6 text-purple-600" />
               </div>
               <div>
                 <p className="text-sm text-muted-foreground">Total (Showing)</p>
                 <p className="text-2xl font-bold">{formatCurrency(totalSales)}</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardContent className="pt-6">
+            <div className="flex items-center gap-4">
+              <div className="p-3 bg-red-100 dark:bg-red-900/30 rounded-lg">
+                <RotateCcw className="h-6 w-6 text-red-600" />
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground">Total Refunds</p>
+                <p className="text-2xl font-bold text-red-600">{formatCurrency(totalRefunds)}</p>
               </div>
             </div>
           </CardContent>
@@ -172,56 +425,129 @@ const Sales = () => {
         )}
       </div>
 
-      {/* Sales Table */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Receipt className="h-5 w-5" />
+      {/* Tabs for Sales and Refunds */}
+      <Tabs defaultValue="sales" className="space-y-4">
+        <TabsList>
+          <TabsTrigger value="sales" className="gap-2">
+            <Receipt className="h-4 w-4" />
             Sales Records
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Receipt #</TableHead>
-                <TableHead>Date</TableHead>
-                <TableHead>Customer</TableHead>
-                <TableHead>Payment</TableHead>
-                <TableHead className="text-right">Total</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filteredSales.map(sale => (
-                <TableRow key={sale.id}>
-                  <TableCell className="font-mono">{sale.receipt_number}</TableCell>
-                  <TableCell>{new Date(sale.created_at).toLocaleString()}</TableCell>
-                  <TableCell>{sale.customer_name || 'Walk-in'}</TableCell>
-                  <TableCell>
-                    <Badge variant="outline" className="capitalize">
-                      {sale.payment_method.replace('_', ' ')}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="text-right font-medium">{formatCurrency(sale.total)}</TableCell>
-                  <TableCell className="text-right">
-                    <Button size="sm" variant="ghost" onClick={() => viewSaleDetails(sale)}>
-                      <Eye className="h-4 w-4" />
-                    </Button>
-                  </TableCell>
-                </TableRow>
-              ))}
-              {filteredSales.length === 0 && (
-                <TableRow>
-                  <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
-                    No sales found
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
+          </TabsTrigger>
+          <TabsTrigger value="refunds" className="gap-2">
+            <RotateCcw className="h-4 w-4" />
+            Refund History
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="sales">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Receipt className="h-5 w-5" />
+                Sales Records
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Receipt #</TableHead>
+                    <TableHead>Date</TableHead>
+                    <TableHead>Customer</TableHead>
+                    <TableHead>Payment</TableHead>
+                    <TableHead className="text-right">Total</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filteredSales.map(sale => (
+                    <TableRow key={sale.id}>
+                      <TableCell className="font-mono">{sale.receipt_number}</TableCell>
+                      <TableCell>{new Date(sale.created_at).toLocaleString()}</TableCell>
+                      <TableCell>{sale.customer_name || 'Walk-in'}</TableCell>
+                      <TableCell>
+                        <Badge variant="outline" className="capitalize">
+                          {sale.payment_method.replace('_', ' ')}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-right font-medium">{formatCurrency(sale.total)}</TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex justify-end gap-1">
+                          <Button size="sm" variant="ghost" onClick={() => viewSaleDetails(sale)} title="View Details">
+                            <Eye className="h-4 w-4" />
+                          </Button>
+                          <Button size="sm" variant="ghost" onClick={() => openRefundDialog(sale)} title="Process Refund">
+                            <RotateCcw className="h-4 w-4" />
+                          </Button>
+                          <Button size="sm" variant="ghost" onClick={() => voidReceipt(sale)} title="Void Receipt" className="text-destructive hover:text-destructive">
+                            <Ban className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                  {filteredSales.length === 0 && (
+                    <TableRow>
+                      <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
+                        No sales found
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="refunds">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <RotateCcw className="h-5 w-5" />
+                Refund History
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Date</TableHead>
+                    <TableHead>Receipt #</TableHead>
+                    <TableHead>Customer</TableHead>
+                    <TableHead>Type</TableHead>
+                    <TableHead>Reason</TableHead>
+                    <TableHead className="text-right">Amount</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filteredRefunds.map(refund => (
+                    <TableRow key={refund.id}>
+                      <TableCell>{new Date(refund.created_at).toLocaleDateString()}</TableCell>
+                      <TableCell className="font-mono">{refund.receipt_number}</TableCell>
+                      <TableCell>{refund.sales?.customer_name || 'Walk-in'}</TableCell>
+                      <TableCell>
+                        <Badge variant={refund.items_returned?.length > 0 ? 'secondary' : 'outline'}>
+                          {refund.items_returned?.length > 0 ? 'Items' : 'Amount'}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="max-w-xs truncate">{refund.reason}</TableCell>
+                      <TableCell className="text-right font-medium text-red-600">
+                        -{formatCurrency(refund.amount)}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                  {filteredRefunds.length === 0 && (
+                    <TableRow>
+                      <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
+                        No refunds found
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
 
       {/* Sale Details Dialog */}
       <Dialog open={!!selectedSale} onOpenChange={() => setSelectedSale(null)}>
@@ -283,6 +609,152 @@ const Sales = () => {
                   </div>
                 )}
               </div>
+
+              <div className="flex gap-2 pt-4 border-t">
+                <Button variant="outline" className="flex-1" onClick={() => { setSelectedSale(null); openRefundDialog(selectedSale); }}>
+                  <RotateCcw className="h-4 w-4 mr-2" />
+                  Process Refund
+                </Button>
+                <Button variant="destructive" className="flex-1" onClick={() => { setSelectedSale(null); voidReceipt(selectedSale); }}>
+                  <Ban className="h-4 w-4 mr-2" />
+                  Void Receipt
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Refund Dialog */}
+      <Dialog open={refundDialogOpen} onOpenChange={(open) => { 
+        setRefundDialogOpen(open); 
+        if (!open) {
+          setRefundSale(null);
+          setReason('');
+          setRefundItems([]);
+          setCustomAmount('');
+        }
+      }}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Process Refund</DialogTitle>
+          </DialogHeader>
+          {refundSale && (
+            <div className="space-y-4">
+              <Card className="bg-secondary/50">
+                <CardContent className="pt-4 space-y-2">
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Receipt:</span>
+                    <span className="font-mono">{refundSale.receipt_number}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Customer:</span>
+                    <span>{refundSale.customer_name || 'Walk-in'}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Date:</span>
+                    <span>{new Date(refundSale.created_at).toLocaleDateString()}</span>
+                  </div>
+                  <div className="flex justify-between font-bold">
+                    <span>Sale Total:</span>
+                    <span>{formatCurrency(refundSale.total)}</span>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Refund Type Selection */}
+              <div>
+                <Label>Refund Type</Label>
+                <RadioGroup value={refundType} onValueChange={(v) => setRefundType(v as 'full' | 'partial')} className="mt-2">
+                  <div className="flex items-center space-x-2">
+                    <RadioGroupItem value="full" id="full" />
+                    <Label htmlFor="full" className="cursor-pointer">Full Refund ({formatCurrency(refundSale.total)})</Label>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <RadioGroupItem value="partial" id="partial" />
+                    <Label htmlFor="partial" className="cursor-pointer">Partial Refund (Select items or enter amount)</Label>
+                  </div>
+                </RadioGroup>
+              </div>
+
+              {/* Partial Refund Options */}
+              {refundType === 'partial' && (
+                <>
+                  <Card>
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-base">Select Items to Refund</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Product</TableHead>
+                            <TableHead className="text-right">Purchased</TableHead>
+                            <TableHead className="text-right">Refund Qty</TableHead>
+                            <TableHead className="text-right">Amount</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {refundItems.map((item, idx) => (
+                            <TableRow key={idx}>
+                              <TableCell>{item.product_name}</TableCell>
+                              <TableCell className="text-right">{item.quantity}</TableCell>
+                              <TableCell className="text-right">
+                                <Input
+                                  type="number"
+                                  className="w-20 text-right"
+                                  min={0}
+                                  max={item.quantity}
+                                  value={item.refund_qty}
+                                  onChange={(e) => updateItemRefundQty(idx, parseInt(e.target.value) || 0)}
+                                />
+                              </TableCell>
+                              <TableCell className="text-right">
+                                {formatCurrency(item.refund_qty * item.unit_price)}
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </CardContent>
+                  </Card>
+
+                  <div>
+                    <Label>Or Enter Custom Amount (UGX)</Label>
+                    <Input
+                      type="number"
+                      placeholder="Custom refund amount"
+                      value={customAmount}
+                      onChange={(e) => setCustomAmount(e.target.value)}
+                      max={refundSale.total}
+                    />
+                    <p className="text-xs text-muted-foreground mt-1">Leave empty to use item-based calculation</p>
+                  </div>
+                </>
+              )}
+
+              <div className="p-4 bg-primary/10 rounded-lg">
+                <div className="flex justify-between items-center">
+                  <span className="font-medium">Refund Amount:</span>
+                  <span className="text-2xl font-bold text-primary">{formatCurrency(refundAmount)}</span>
+                </div>
+                {refundType === 'partial' && (
+                  <Badge variant="secondary" className="mt-2">Partial Refund</Badge>
+                )}
+              </div>
+
+              <div>
+                <Label>Reason for Refund *</Label>
+                <Textarea
+                  value={reason}
+                  onChange={(e) => setReason(e.target.value)}
+                  placeholder="Describe the reason for this refund"
+                />
+              </div>
+
+              <Button onClick={processRefund} disabled={processingRefund || !reason} className="w-full">
+                {processingRefund ? 'Processing...' : `Confirm Refund - ${formatCurrency(refundAmount)}`}
+              </Button>
             </div>
           )}
         </DialogContent>

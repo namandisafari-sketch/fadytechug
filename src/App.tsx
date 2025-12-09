@@ -17,7 +17,6 @@ import Settings from "./pages/admin/Settings";
 import PointOfSale from "./pages/admin/PointOfSale";
 import Inventory from "./pages/admin/Inventory";
 import Sales from "./pages/admin/Sales";
-import Refunds from "./pages/admin/Refunds";
 import Expenses from "./pages/admin/Expenses";
 import Suppliers from "./pages/admin/Suppliers";
 import Banking from "./pages/admin/Banking";
@@ -47,7 +46,6 @@ function App() {
                 <Route path="products" element={<Products />} />
                 <Route path="inventory" element={<Inventory />} />
                 <Route path="sales" element={<Sales />} />
-                <Route path="refunds" element={<Refunds />} />
                 <Route path="purchase-orders" element={<PurchaseOrders />} />
                 <Route path="expenses" element={<Expenses />} />
                 <Route path="suppliers" element={<Suppliers />} />
