@@ -283,6 +283,27 @@ export type Database = {
           },
         ]
       }
+      page_permissions: {
+        Row: {
+          created_at: string
+          id: string
+          page_path: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          page_path: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          page_path?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       products: {
         Row: {
           barcode: string | null
@@ -830,6 +851,10 @@ export type Database = {
     Functions: {
       generate_order_number: { Args: never; Returns: string }
       generate_receipt_number: { Args: never; Returns: string }
+      has_page_access: {
+        Args: { _page_path: string; _user_id: string }
+        Returns: boolean
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]

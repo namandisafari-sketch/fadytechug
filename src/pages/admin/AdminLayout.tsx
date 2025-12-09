@@ -18,13 +18,14 @@ import {
   Receipt,
   Wallet,
   Building2,
-  RotateCcw,
   ClipboardList,
   ShoppingBag,
   FileText,
   Hash,
   Moon,
-  Sun
+  Sun,
+  UsersRound,
+  Lock
 } from 'lucide-react';
 import { useState } from 'react';
 import { cn } from '@/lib/utils';
@@ -48,8 +49,13 @@ const navItems = [
   { path: '/admin/settings', icon: Settings, label: 'Settings' },
 ];
 
+// Admin-only pages
+const adminOnlyItems = [
+  { path: '/admin/staff', icon: UsersRound, label: 'Staff Management' },
+];
+
 const AdminLayout = () => {
-  const { user, loading, isStaff, isAdmin, signOut, userRole } = useAuth();
+  const { user, loading, isStaff, isAdmin, signOut, userRole, hasPageAccess } = useAuth();
   const { theme, toggleTheme } = useTheme();
   const navigate = useNavigate();
   const location = useLocation();
@@ -68,6 +74,9 @@ const AdminLayout = () => {
     navigate('/auth');
   };
 
+  // Filter nav items based on user permissions
+  const accessibleNavItems = navItems.filter(item => hasPageAccess(item.path));
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
@@ -78,6 +87,25 @@ const AdminLayout = () => {
 
   if (!user || !isStaff) {
     return null;
+  }
+
+  // Check if current page is accessible
+  const currentPath = location.pathname;
+  const isCurrentPageAccessible = hasPageAccess(currentPath) || 
+    adminOnlyItems.some(item => currentPath.startsWith(item.path));
+  
+  // If staff member tries to access a page they don't have permission for
+  if (!isAdmin && !isCurrentPageAccessible && currentPath !== '/admin') {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="text-center space-y-4">
+          <Lock className="h-16 w-16 mx-auto text-muted-foreground" />
+          <h1 className="text-2xl font-bold">Access Denied</h1>
+          <p className="text-muted-foreground">You don't have permission to access this page.</p>
+          <Button onClick={() => navigate('/admin')}>Go to Dashboard</Button>
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -123,10 +151,10 @@ const AdminLayout = () => {
 
           {/* Navigation */}
           <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
-            {navItems.map((item) => {
+            {accessibleNavItems.map((item) => {
               const isActive = item.exact 
                 ? location.pathname === item.path
-                : location.pathname.startsWith(item.path);
+                : location.pathname.startsWith(item.path) && item.path !== '/admin';
               
               return (
                 <Link
@@ -145,6 +173,37 @@ const AdminLayout = () => {
                 </Link>
               );
             })}
+
+            {/* Admin-only section */}
+            {isAdmin && (
+              <>
+                <div className="pt-4 pb-2">
+                  <p className="px-4 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                    Administration
+                  </p>
+                </div>
+                {adminOnlyItems.map((item) => {
+                  const isActive = location.pathname.startsWith(item.path);
+                  
+                  return (
+                    <Link
+                      key={item.path}
+                      to={item.path}
+                      onClick={() => setSidebarOpen(false)}
+                      className={cn(
+                        "flex items-center gap-3 px-4 py-2.5 rounded-lg transition-colors",
+                        isActive 
+                          ? "bg-primary text-primary-foreground" 
+                          : "hover:bg-secondary text-foreground"
+                      )}
+                    >
+                      <item.icon className="h-5 w-5" />
+                      <span className="font-medium text-sm">{item.label}</span>
+                    </Link>
+                  );
+                })}
+              </>
+            )}
           </nav>
 
           {/* Theme Toggle & User info & Logout */}

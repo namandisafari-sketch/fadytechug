@@ -8,12 +8,15 @@ interface AuthContextType {
   user: User | null;
   session: Session | null;
   userRole: UserRole;
+  pagePermissions: string[];
   loading: boolean;
   signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
   signUp: (email: string, password: string, fullName?: string) => Promise<{ error: Error | null }>;
   signOut: () => Promise<void>;
   isAdmin: boolean;
   isStaff: boolean;
+  hasPageAccess: (path: string) => boolean;
+  refreshPermissions: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -22,6 +25,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [userRole, setUserRole] = useState<UserRole>(null);
+  const [pagePermissions, setPagePermissions] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
 
   const fetchUserRole = async (userId: string) => {
@@ -37,6 +41,34 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
     
     return data?.role as UserRole;
+  };
+
+  const fetchPagePermissions = async (userId: string) => {
+    const { data, error } = await supabase
+      .from('page_permissions')
+      .select('page_path')
+      .eq('user_id', userId);
+    
+    if (error) {
+      console.error('Error fetching page permissions:', error);
+      return [];
+    }
+    
+    return data?.map(p => p.page_path) || [];
+  };
+
+  const refreshPermissions = async () => {
+    if (user) {
+      const role = await fetchUserRole(user.id);
+      setUserRole(role);
+      
+      if (role === 'staff') {
+        const permissions = await fetchPagePermissions(user.id);
+        setPagePermissions(permissions);
+      } else {
+        setPagePermissions([]);
+      }
+    }
   };
 
   useEffect(() => {
@@ -57,11 +89,21 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             const role = await fetchUserRole(session.user.id);
             if (isMounted) {
               setUserRole(role);
+              
+              // Fetch page permissions for staff
+              if (role === 'staff') {
+                const permissions = await fetchPagePermissions(session.user.id);
+                if (isMounted) {
+                  setPagePermissions(permissions);
+                }
+              }
+              
               setLoading(false);
             }
           }, 0);
         } else {
           setUserRole(null);
+          setPagePermissions([]);
           setLoading(false);
         }
       }
@@ -78,6 +120,15 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         const role = await fetchUserRole(session.user.id);
         if (isMounted) {
           setUserRole(role);
+          
+          // Fetch page permissions for staff
+          if (role === 'staff') {
+            const permissions = await fetchPagePermissions(session.user.id);
+            if (isMounted) {
+              setPagePermissions(permissions);
+            }
+          }
+          
           setLoading(false);
         }
       } else {
@@ -112,6 +163,22 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const signOut = async () => {
     await supabase.auth.signOut();
     setUserRole(null);
+    setPagePermissions([]);
+  };
+
+  const hasPageAccess = (path: string): boolean => {
+    // Admins have access to all pages
+    if (userRole === 'admin') return true;
+    
+    // Staff need specific page permissions
+    if (userRole === 'staff') {
+      // Check exact match or parent path
+      return pagePermissions.some(p => 
+        path === p || path.startsWith(p + '/')
+      );
+    }
+    
+    return false;
   };
 
   return (
@@ -119,12 +186,15 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       user,
       session,
       userRole,
+      pagePermissions,
       loading,
       signIn,
       signUp,
       signOut,
       isAdmin: userRole === 'admin',
-      isStaff: userRole === 'staff' || userRole === 'admin'
+      isStaff: userRole === 'staff' || userRole === 'admin',
+      hasPageAccess,
+      refreshPermissions
     }}>
       {children}
     </AuthContext.Provider>
