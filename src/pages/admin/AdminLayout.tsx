@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { Outlet, useNavigate, Link, useLocation } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
+import { useTheme } from '@/hooks/useTheme';
 import { Button } from '@/components/ui/button';
 import { 
   LayoutDashboard, 
@@ -20,7 +21,10 @@ import {
   RotateCcw,
   ClipboardList,
   ShoppingBag,
-  FileText
+  FileText,
+  Hash,
+  Moon,
+  Sun
 } from 'lucide-react';
 import { useState } from 'react';
 import { cn } from '@/lib/utils';
@@ -32,6 +36,7 @@ const navItems = [
   { path: '/admin/pos', icon: ShoppingCart, label: 'Point of Sale' },
   { path: '/admin/products', icon: Package, label: 'Products' },
   { path: '/admin/inventory', icon: ClipboardList, label: 'Inventory' },
+  { path: '/admin/serial-numbers', icon: Hash, label: 'Serial Numbers' },
   { path: '/admin/sales', icon: Receipt, label: 'Sales' },
   { path: '/admin/refunds', icon: RotateCcw, label: 'Refunds' },
   { path: '/admin/purchase-orders', icon: ShoppingBag, label: 'Purchase Orders' },
@@ -46,6 +51,7 @@ const navItems = [
 
 const AdminLayout = () => {
   const { user, loading, isStaff, isAdmin, signOut, userRole } = useAuth();
+  const { theme, toggleTheme } = useTheme();
   const navigate = useNavigate();
   const location = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -76,16 +82,32 @@ const AdminLayout = () => {
   }
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background relative">
+      {/* Background Logo Watermark */}
+      <div 
+        className="fixed inset-0 pointer-events-none z-0 opacity-[0.03] dark:opacity-[0.02]"
+        style={{
+          backgroundImage: `url(${fadyLogo})`,
+          backgroundRepeat: 'no-repeat',
+          backgroundPosition: 'center center',
+          backgroundSize: '50%'
+        }}
+      />
+
       {/* Mobile header */}
       <header className="lg:hidden fixed top-0 left-0 right-0 h-16 bg-card border-b border-border z-50 flex items-center justify-between px-4">
         <Button variant="ghost" size="icon" onClick={() => setSidebarOpen(!sidebarOpen)}>
           {sidebarOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
         </Button>
         <img src={fadyLogo} alt="Fady Technologies" className="h-8" />
-        <Button variant="ghost" size="icon" onClick={handleSignOut}>
-          <LogOut className="h-5 w-5" />
-        </Button>
+        <div className="flex items-center gap-1">
+          <Button variant="ghost" size="icon" onClick={toggleTheme}>
+            {theme === 'dark' ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
+          </Button>
+          <Button variant="ghost" size="icon" onClick={handleSignOut}>
+            <LogOut className="h-5 w-5" />
+          </Button>
+        </div>
       </header>
 
       {/* Sidebar */}
@@ -126,8 +148,16 @@ const AdminLayout = () => {
             })}
           </nav>
 
-          {/* User info & Logout */}
+          {/* Theme Toggle & User info & Logout */}
           <div className="p-4 border-t border-border space-y-3">
+            <Button 
+              variant="outline" 
+              className="w-full justify-start gap-3" 
+              onClick={toggleTheme}
+            >
+              {theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+              {theme === 'dark' ? 'Light Mode' : 'Dark Mode'}
+            </Button>
             <div className="flex items-center gap-2 px-4 py-2 bg-secondary/50 rounded-lg">
               <ShieldCheck className="h-4 w-4 text-primary" />
               <span className="text-sm font-medium capitalize">{userRole}</span>
@@ -153,7 +183,7 @@ const AdminLayout = () => {
       )}
 
       {/* Main content */}
-      <main className="lg:ml-64 pt-16 lg:pt-0 min-h-screen">
+      <main className="lg:ml-64 pt-16 lg:pt-0 min-h-screen relative z-10">
         <div className="p-6">
           <Outlet />
         </div>

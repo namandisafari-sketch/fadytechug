@@ -637,6 +637,132 @@ export type Database = {
           },
         ]
       }
+      serial_unit_history: {
+        Row: {
+          action: string
+          created_at: string
+          id: string
+          new_location: string | null
+          new_status: string | null
+          notes: string | null
+          performed_by: string | null
+          previous_location: string | null
+          previous_status: string | null
+          serial_unit_id: string
+        }
+        Insert: {
+          action: string
+          created_at?: string
+          id?: string
+          new_location?: string | null
+          new_status?: string | null
+          notes?: string | null
+          performed_by?: string | null
+          previous_location?: string | null
+          previous_status?: string | null
+          serial_unit_id: string
+        }
+        Update: {
+          action?: string
+          created_at?: string
+          id?: string
+          new_location?: string | null
+          new_status?: string | null
+          notes?: string | null
+          performed_by?: string | null
+          previous_location?: string | null
+          previous_status?: string | null
+          serial_unit_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "serial_unit_history_serial_unit_id_fkey"
+            columns: ["serial_unit_id"]
+            isOneToOne: false
+            referencedRelation: "serial_units"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      serial_units: {
+        Row: {
+          condition: string | null
+          created_at: string
+          customer_id: string | null
+          id: string
+          location: string | null
+          notes: string | null
+          product_id: string
+          purchase_cost: number | null
+          purchase_date: string | null
+          sale_id: string | null
+          serial_number: string
+          sold_date: string | null
+          status: string
+          updated_at: string
+          warranty_end_date: string | null
+          warranty_start_date: string | null
+        }
+        Insert: {
+          condition?: string | null
+          created_at?: string
+          customer_id?: string | null
+          id?: string
+          location?: string | null
+          notes?: string | null
+          product_id: string
+          purchase_cost?: number | null
+          purchase_date?: string | null
+          sale_id?: string | null
+          serial_number: string
+          sold_date?: string | null
+          status?: string
+          updated_at?: string
+          warranty_end_date?: string | null
+          warranty_start_date?: string | null
+        }
+        Update: {
+          condition?: string | null
+          created_at?: string
+          customer_id?: string | null
+          id?: string
+          location?: string | null
+          notes?: string | null
+          product_id?: string
+          purchase_cost?: number | null
+          purchase_date?: string | null
+          sale_id?: string | null
+          serial_number?: string
+          sold_date?: string | null
+          status?: string
+          updated_at?: string
+          warranty_end_date?: string | null
+          warranty_start_date?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "serial_units_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "serial_units_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "serial_units_sale_id_fkey"
+            columns: ["sale_id"]
+            isOneToOne: false
+            referencedRelation: "sales"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       suppliers: {
         Row: {
           address: string | null

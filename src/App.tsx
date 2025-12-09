@@ -23,6 +23,7 @@ import Suppliers from "./pages/admin/Suppliers";
 import Banking from "./pages/admin/Banking";
 import PurchaseOrders from "./pages/admin/PurchaseOrders";
 import Reports from "./pages/admin/Reports";
+import SerialNumbers from "./pages/admin/SerialNumbers";
 
 const queryClient = new QueryClient();
 
@@ -52,6 +53,7 @@ function App() {
                 <Route path="suppliers" element={<Suppliers />} />
                 <Route path="banking" element={<Banking />} />
                 <Route path="reports" element={<Reports />} />
+                <Route path="serial-numbers" element={<SerialNumbers />} />
                 <Route path="customers" element={<Customers />} />
                 <Route path="inquiries" element={<Inquiries />} />
                 <Route path="settings" element={<Settings />} />
