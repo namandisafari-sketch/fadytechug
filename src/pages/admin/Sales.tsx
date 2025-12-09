@@ -8,6 +8,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { Receipt, Search, Eye, Printer, DollarSign, TrendingUp } from 'lucide-react';
+import { formatCurrency } from '@/lib/currency';
 
 interface Sale {
   id: string;
@@ -112,7 +113,7 @@ const Sales = () => {
               </div>
               <div>
                 <p className="text-sm text-muted-foreground">Today's Sales</p>
-                <p className="text-2xl font-bold">${todayTotal.toFixed(2)}</p>
+                <p className="text-2xl font-bold">{formatCurrency(todayTotal)}</p>
               </div>
             </div>
           </CardContent>
@@ -140,7 +141,7 @@ const Sales = () => {
               </div>
               <div>
                 <p className="text-sm text-muted-foreground">Total (Showing)</p>
-                <p className="text-2xl font-bold">${totalSales.toFixed(2)}</p>
+                <p className="text-2xl font-bold">{formatCurrency(totalSales)}</p>
               </div>
             </div>
           </CardContent>
@@ -202,7 +203,7 @@ const Sales = () => {
                       {sale.payment_method.replace('_', ' ')}
                     </Badge>
                   </TableCell>
-                  <TableCell className="text-right font-medium">${sale.total.toFixed(2)}</TableCell>
+                  <TableCell className="text-right font-medium">{formatCurrency(sale.total)}</TableCell>
                   <TableCell className="text-right">
                     <Button size="sm" variant="ghost" onClick={() => viewSaleDetails(sale)}>
                       <Eye className="h-4 w-4" />
@@ -248,24 +249,24 @@ const Sales = () => {
                   {saleItems.map(item => (
                     <div key={item.id} className="flex justify-between">
                       <span>{item.quantity}x {item.product_name}</span>
-                      <span>${item.total_price.toFixed(2)}</span>
+                      <span>{formatCurrency(item.total_price)}</span>
                     </div>
                   ))}
                 </div>
 
                 <div className="flex justify-between">
                   <span>Subtotal</span>
-                  <span>${selectedSale.subtotal.toFixed(2)}</span>
+                  <span>{formatCurrency(selectedSale.subtotal)}</span>
                 </div>
                 {selectedSale.discount > 0 && (
                   <div className="flex justify-between text-green-600">
                     <span>Discount</span>
-                    <span>-${selectedSale.discount.toFixed(2)}</span>
+                    <span>-{formatCurrency(selectedSale.discount)}</span>
                   </div>
                 )}
                 <div className="flex justify-between font-bold text-lg">
                   <span>Total</span>
-                  <span>${selectedSale.total.toFixed(2)}</span>
+                  <span>{formatCurrency(selectedSale.total)}</span>
                 </div>
                 <div className="flex justify-between">
                   <span>Payment Method</span>
@@ -273,12 +274,12 @@ const Sales = () => {
                 </div>
                 <div className="flex justify-between">
                   <span>Amount Paid</span>
-                  <span>${selectedSale.amount_paid.toFixed(2)}</span>
+                  <span>{formatCurrency(selectedSale.amount_paid)}</span>
                 </div>
                 {selectedSale.change_given > 0 && (
                   <div className="flex justify-between">
                     <span>Change</span>
-                    <span>${selectedSale.change_given.toFixed(2)}</span>
+                    <span>{formatCurrency(selectedSale.change_given)}</span>
                   </div>
                 )}
               </div>

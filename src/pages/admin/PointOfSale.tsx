@@ -10,6 +10,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { Search, Plus, Minus, Trash2, ShoppingCart, Printer, X } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { formatCurrency } from '@/lib/currency';
 
 interface Product {
   id: string;
@@ -230,13 +231,18 @@ const PointOfSale = () => {
               >
                 <CardContent className="p-4">
                   <h3 className="font-medium text-sm line-clamp-2">{product.name}</h3>
-                  <p className="text-primary font-bold mt-1">${product.price.toFixed(2)}</p>
+                  <p className="text-primary font-bold mt-1">{formatCurrency(product.price)}</p>
                   <Badge variant="secondary" className="mt-2 text-xs">
                     Stock: {product.stock_quantity}
                   </Badge>
                 </CardContent>
               </Card>
             ))}
+            {filteredProducts.length === 0 && (
+              <div className="col-span-full text-center py-12 text-muted-foreground">
+                No products available. Add products first.
+              </div>
+            )}
           </div>
         </div>
 
@@ -258,7 +264,7 @@ const PointOfSale = () => {
                     <div key={item.product.id} className="flex items-center justify-between gap-2 p-2 bg-secondary/50 rounded-lg">
                       <div className="flex-1 min-w-0">
                         <p className="font-medium text-sm truncate">{item.product.name}</p>
-                        <p className="text-xs text-muted-foreground">${item.product.price.toFixed(2)} each</p>
+                        <p className="text-xs text-muted-foreground">{formatCurrency(item.product.price)} each</p>
                       </div>
                       <div className="flex items-center gap-1">
                         <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => updateQuantity(item.product.id, -1)}>
@@ -280,20 +286,20 @@ const PointOfSale = () => {
               <div className="border-t pt-4 space-y-2">
                 <div className="flex justify-between text-sm">
                   <span>Subtotal</span>
-                  <span>${subtotal.toFixed(2)}</span>
+                  <span>{formatCurrency(subtotal)}</span>
                 </div>
                 <div className="flex justify-between text-sm items-center gap-2">
-                  <span>Discount</span>
+                  <span>Discount (UGX)</span>
                   <Input 
                     type="number" 
                     value={discount} 
                     onChange={(e) => setDiscount(e.target.value)}
-                    className="w-24 h-8 text-right"
+                    className="w-28 h-8 text-right"
                   />
                 </div>
                 <div className="flex justify-between font-bold text-lg">
                   <span>Total</span>
-                  <span className="text-primary">${total.toFixed(2)}</span>
+                  <span className="text-primary">{formatCurrency(total)}</span>
                 </div>
               </div>
 
@@ -324,15 +330,15 @@ const PointOfSale = () => {
 
                 {paymentMethod === 'cash' && (
                   <div>
-                    <Label>Amount Paid</Label>
+                    <Label>Amount Paid (UGX)</Label>
                     <Input 
                       type="number"
                       value={amountPaid} 
                       onChange={(e) => setAmountPaid(e.target.value)}
-                      placeholder="0.00"
+                      placeholder="0"
                     />
                     {change > 0 && (
-                      <p className="text-sm text-green-600 mt-1">Change: ${change.toFixed(2)}</p>
+                      <p className="text-sm text-green-600 mt-1">Change: {formatCurrency(change)}</p>
                     )}
                   </div>
                 )}
@@ -343,7 +349,7 @@ const PointOfSale = () => {
                   onClick={processSale}
                   disabled={loading || cart.length === 0}
                 >
-                  {loading ? 'Processing...' : `Complete Sale - $${total.toFixed(2)}`}
+                  {loading ? 'Processing...' : `Complete Sale - ${formatCurrency(total)}`}
                 </Button>
               </div>
             </CardContent>
@@ -377,32 +383,32 @@ const PointOfSale = () => {
                   {lastSale.items.map((item: CartItem) => (
                     <div key={item.product.id} className="flex justify-between">
                       <span>{item.quantity}x {item.product.name}</span>
-                      <span>${(item.product.price * item.quantity).toFixed(2)}</span>
+                      <span>{formatCurrency(item.product.price * item.quantity)}</span>
                     </div>
                   ))}
                 </div>
                 <div className="flex justify-between">
                   <span>Subtotal</span>
-                  <span>${lastSale.subtotal.toFixed(2)}</span>
+                  <span>{formatCurrency(lastSale.subtotal)}</span>
                 </div>
                 {lastSale.discount > 0 && (
                   <div className="flex justify-between text-green-600">
                     <span>Discount</span>
-                    <span>-${lastSale.discount.toFixed(2)}</span>
+                    <span>-{formatCurrency(lastSale.discount)}</span>
                   </div>
                 )}
                 <div className="flex justify-between font-bold text-lg">
                   <span>Total</span>
-                  <span>${lastSale.total.toFixed(2)}</span>
+                  <span>{formatCurrency(lastSale.total)}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span>Paid ({lastSale.payment_method})</span>
-                  <span>${lastSale.amount_paid.toFixed(2)}</span>
+                  <span>Paid ({lastSale.payment_method.replace('_', ' ')})</span>
+                  <span>{formatCurrency(lastSale.amount_paid)}</span>
                 </div>
                 {lastSale.change_given > 0 && (
                   <div className="flex justify-between">
                     <span>Change</span>
-                    <span>${lastSale.change_given.toFixed(2)}</span>
+                    <span>{formatCurrency(lastSale.change_given)}</span>
                   </div>
                 )}
               </div>
