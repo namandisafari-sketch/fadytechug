@@ -11,7 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
-import { Plus, Package, Edit, Trash2, Search, Upload, X, Image } from 'lucide-react';
+import { Plus, Package, Edit, Trash2, Search, Upload, X, Image, Barcode } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
 import { formatCurrency } from '@/lib/currency';
 
@@ -28,6 +28,7 @@ interface Product {
   is_active: boolean;
   is_featured: boolean;
   image_url: string | null;
+  barcode: string | null;
   created_at: string;
 }
 
@@ -49,6 +50,7 @@ const Products = () => {
   const [stockQuantity, setStockQuantity] = useState('');
   const [isActive, setIsActive] = useState(true);
   const [isFeatured, setIsFeatured] = useState(false);
+  const [barcode, setBarcode] = useState('');
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
@@ -75,6 +77,7 @@ const Products = () => {
     setStockQuantity('');
     setIsActive(true);
     setIsFeatured(false);
+    setBarcode('');
     setImageUrl(null);
     setImageFile(null);
     setImagePreview(null);
@@ -89,6 +92,7 @@ const Products = () => {
     setStockQuantity(product.stock_quantity.toString());
     setIsActive(product.is_active);
     setIsFeatured(product.is_featured);
+    setBarcode(product.barcode || '');
     setImageUrl(product.image_url);
     setImagePreview(product.image_url);
     setImageFile(null);
@@ -178,6 +182,7 @@ const Products = () => {
         stock_quantity: parseInt(stockQuantity) || 0,
         is_active: isActive,
         is_featured: isFeatured,
+        barcode: barcode.trim() || null,
         image_url: uploadedImageUrl,
         created_by: user?.id
       };
@@ -288,6 +293,14 @@ const Products = () => {
                 <div><Label>Price (UGX) *</Label><Input type="number" value={price} onChange={(e) => setPrice(e.target.value)} /></div>
                 <div><Label>Stock</Label><Input type="number" value={stockQuantity} onChange={(e) => setStockQuantity(e.target.value)} /></div>
               </div>
+              <div>
+                <Label className="flex items-center gap-2"><Barcode className="h-4 w-4" />Barcode (for POS scanning)</Label>
+                <Input 
+                  value={barcode} 
+                  onChange={(e) => setBarcode(e.target.value)} 
+                  placeholder="Enter or scan product barcode"
+                />
+              </div>
               <div><Label>Description</Label><Textarea value={description} onChange={(e) => setDescription(e.target.value)} /></div>
               <div className="flex items-center justify-between"><Label>Active</Label><Switch checked={isActive} onCheckedChange={setIsActive} /></div>
               <div className="flex items-center justify-between"><Label>Featured</Label><Switch checked={isFeatured} onCheckedChange={setIsFeatured} /></div>
@@ -312,6 +325,7 @@ const Products = () => {
               <TableRow>
                 <TableHead className="w-16">Image</TableHead>
                 <TableHead>Name</TableHead>
+                <TableHead>Barcode</TableHead>
                 <TableHead>Category</TableHead>
                 <TableHead className="text-right">Price</TableHead>
                 <TableHead className="text-right">Stock</TableHead>
@@ -332,6 +346,16 @@ const Products = () => {
                     )}
                   </TableCell>
                   <TableCell className="font-medium">{product.name}</TableCell>
+                  <TableCell>
+                    {product.barcode ? (
+                      <Badge variant="outline" className="gap-1 font-mono text-xs">
+                        <Barcode className="h-3 w-3" />
+                        {product.barcode}
+                      </Badge>
+                    ) : (
+                      <span className="text-muted-foreground text-xs">—</span>
+                    )}
+                  </TableCell>
                   <TableCell>{product.category}</TableCell>
                   <TableCell className="text-right">{formatCurrency(product.price)}</TableCell>
                   <TableCell className="text-right">{product.stock_quantity}</TableCell>
@@ -343,7 +367,7 @@ const Products = () => {
                 </TableRow>
               ))}
               {filteredProducts.length === 0 && (
-                <TableRow><TableCell colSpan={7} className="text-center text-muted-foreground py-8">No products found</TableCell></TableRow>
+                <TableRow><TableCell colSpan={8} className="text-center text-muted-foreground py-8">No products found</TableCell></TableRow>
               )}
             </TableBody>
           </Table>
