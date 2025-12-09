@@ -4,13 +4,13 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { Building2, Plus, Wallet, DollarSign, ArrowUpRight, ArrowDownRight } from 'lucide-react';
+import { formatCurrency } from '@/lib/currency';
 
 interface BankDeposit {
   id: string;
@@ -233,12 +233,12 @@ const Banking = () => {
             </DialogHeader>
             <div className="space-y-4">
               <div>
-                <Label>Amount *</Label>
+                <Label>Amount (UGX) *</Label>
                 <Input
                   type="number"
                   value={amount}
                   onChange={(e) => setAmount(e.target.value)}
-                  placeholder="0.00"
+                  placeholder="0"
                 />
               </div>
 
@@ -309,35 +309,35 @@ const Banking = () => {
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
               <div className="text-center p-3 bg-secondary/50 rounded-lg">
                 <p className="text-xs text-muted-foreground">Opening</p>
-                <p className="text-lg font-bold">${cashRegister.opening_balance.toFixed(2)}</p>
+                <p className="text-lg font-bold">{formatCurrency(cashRegister.opening_balance)}</p>
               </div>
               <div className="text-center p-3 bg-green-100 rounded-lg">
                 <p className="text-xs text-green-600 flex items-center justify-center gap-1">
                   <ArrowUpRight className="h-3 w-3" /> Sales
                 </p>
-                <p className="text-lg font-bold text-green-600">${cashRegister.total_sales.toFixed(2)}</p>
+                <p className="text-lg font-bold text-green-600">{formatCurrency(cashRegister.total_sales)}</p>
               </div>
               <div className="text-center p-3 bg-red-100 rounded-lg">
                 <p className="text-xs text-red-600 flex items-center justify-center gap-1">
                   <ArrowDownRight className="h-3 w-3" /> Refunds
                 </p>
-                <p className="text-lg font-bold text-red-600">${cashRegister.total_refunds.toFixed(2)}</p>
+                <p className="text-lg font-bold text-red-600">{formatCurrency(cashRegister.total_refunds)}</p>
               </div>
               <div className="text-center p-3 bg-orange-100 rounded-lg">
                 <p className="text-xs text-orange-600 flex items-center justify-center gap-1">
                   <ArrowDownRight className="h-3 w-3" /> Expenses
                 </p>
-                <p className="text-lg font-bold text-orange-600">${cashRegister.total_expenses.toFixed(2)}</p>
+                <p className="text-lg font-bold text-orange-600">{formatCurrency(cashRegister.total_expenses)}</p>
               </div>
               <div className="text-center p-3 bg-blue-100 rounded-lg">
                 <p className="text-xs text-blue-600 flex items-center justify-center gap-1">
                   <Building2 className="h-3 w-3" /> To Bank
                 </p>
-                <p className="text-lg font-bold text-blue-600">${cashRegister.total_deposits.toFixed(2)}</p>
+                <p className="text-lg font-bold text-blue-600">{formatCurrency(cashRegister.total_deposits)}</p>
               </div>
               <div className="text-center p-3 bg-primary/10 rounded-lg">
                 <p className="text-xs text-primary">Closing Balance</p>
-                <p className="text-lg font-bold text-primary">${cashRegister.closing_balance.toFixed(2)}</p>
+                <p className="text-lg font-bold text-primary">{formatCurrency(cashRegister.closing_balance)}</p>
               </div>
             </div>
           </CardContent>
@@ -354,7 +354,7 @@ const Banking = () => {
               </div>
               <div>
                 <p className="text-sm text-muted-foreground">Total Deposited</p>
-                <p className="text-2xl font-bold">${totalDeposited.toFixed(2)}</p>
+                <p className="text-2xl font-bold">{formatCurrency(totalDeposited)}</p>
               </div>
             </div>
           </CardContent>
@@ -402,7 +402,7 @@ const Banking = () => {
                   <TableCell>{deposit.account_number || '-'}</TableCell>
                   <TableCell>{deposit.reference_number || '-'}</TableCell>
                   <TableCell className="text-right font-medium text-green-600">
-                    ${deposit.amount.toFixed(2)}
+                    {formatCurrency(deposit.amount)}
                   </TableCell>
                 </TableRow>
               ))}

@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Package, MessageSquare, Users, TrendingUp } from 'lucide-react';
+import { Package, MessageSquare, Users, TrendingUp, DollarSign, Receipt } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
+import { formatCurrency } from '@/lib/currency';
 
 interface Stats {
   totalProducts: number;
@@ -9,6 +10,8 @@ interface Stats {
   totalInquiries: number;
   newInquiries: number;
   totalCustomers: number;
+  todaySales: number;
+  todayTransactions: number;
 }
 
 const Dashboard = () => {
@@ -17,25 +20,36 @@ const Dashboard = () => {
     activeProducts: 0,
     totalInquiries: 0,
     newInquiries: 0,
-    totalCustomers: 0
+    totalCustomers: 0,
+    todaySales: 0,
+    todayTransactions: 0
   });
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const fetchStats = async () => {
       try {
-        const [productsRes, inquiriesRes, customersRes] = await Promise.all([
+        const today = new Date().toISOString().split('T')[0];
+        
+        const [productsRes, inquiriesRes, customersRes, salesRes] = await Promise.all([
           supabase.from('products').select('id, is_active'),
           supabase.from('inquiries').select('id, status'),
-          supabase.from('customers').select('id')
+          supabase.from('customers').select('id'),
+          supabase.from('sales').select('total, created_at')
+            .gte('created_at', `${today}T00:00:00`)
+            .lte('created_at', `${today}T23:59:59`)
         ]);
+
+        const todaySalesTotal = salesRes.data?.reduce((sum, s) => sum + s.total, 0) || 0;
 
         setStats({
           totalProducts: productsRes.data?.length || 0,
           activeProducts: productsRes.data?.filter(p => p.is_active).length || 0,
           totalInquiries: inquiriesRes.data?.length || 0,
           newInquiries: inquiriesRes.data?.filter(i => i.status === 'new').length || 0,
-          totalCustomers: customersRes.data?.length || 0
+          totalCustomers: customersRes.data?.length || 0,
+          todaySales: todaySalesTotal,
+          todayTransactions: salesRes.data?.length || 0
         });
       } catch (error) {
         console.error('Error fetching stats:', error);
@@ -48,6 +62,13 @@ const Dashboard = () => {
   }, []);
 
   const statCards = [
+    {
+      title: "Today's Sales",
+      value: formatCurrency(stats.todaySales),
+      subtitle: `${stats.todayTransactions} transactions`,
+      icon: DollarSign,
+      color: 'text-green-500'
+    },
     {
       title: 'Total Products',
       value: stats.totalProducts,
@@ -67,15 +88,6 @@ const Dashboard = () => {
       value: stats.totalCustomers,
       subtitle: 'Total registered',
       icon: Users,
-      color: 'text-green-500'
-    },
-    {
-      title: 'Conversion',
-      value: stats.totalInquiries > 0 
-        ? `${Math.round((stats.totalCustomers / stats.totalInquiries) * 100)}%` 
-        : '0%',
-      subtitle: 'Inquiry to customer',
-      icon: TrendingUp,
       color: 'text-purple-500'
     }
   ];
@@ -111,23 +123,21 @@ const Dashboard = () => {
       <div className="grid gap-4 md:grid-cols-2">
         <Card>
           <CardHeader>
-            <CardTitle>Recent Inquiries</CardTitle>
+            <CardTitle>Quick Actions</CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="space-y-2">
             <p className="text-muted-foreground text-sm">
-              No inquiries yet. They will appear here when customers submit them.
+              Use the sidebar to access Point of Sale, manage products, track inventory, and handle finances.
             </p>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader>
-            <CardTitle>Quick Actions</CardTitle>
+            <CardTitle>System Status</CardTitle>
           </CardHeader>
-          <CardContent className="space-y-2">
-            <p className="text-muted-foreground text-sm">
-              Use the sidebar to manage products, view inquiries, and handle customers.
-            </p>
+          <CardContent>
+            <p className="text-green-600 text-sm font-medium">All systems operational</p>
           </CardContent>
         </Card>
       </div>

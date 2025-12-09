@@ -4,13 +4,13 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { RotateCcw, Search, Plus } from 'lucide-react';
+import { formatCurrency } from '@/lib/currency';
 
 interface Sale {
   id: string;
@@ -165,7 +165,7 @@ const Refunds = () => {
                     </div>
                     <div className="flex justify-between font-bold">
                       <span>Total:</span>
-                      <span>${foundSale.total.toFixed(2)}</span>
+                      <span>{formatCurrency(foundSale.total)}</span>
                     </div>
                   </CardContent>
                 </Card>
@@ -174,14 +174,14 @@ const Refunds = () => {
               {foundSale && (
                 <>
                   <div>
-                    <Label>Refund Amount</Label>
+                    <Label>Refund Amount (UGX)</Label>
                     <Input
                       type="number"
                       value={refundAmount}
                       onChange={(e) => setRefundAmount(e.target.value)}
                       max={foundSale.total}
                     />
-                    <p className="text-xs text-muted-foreground mt-1">Max: ${foundSale.total.toFixed(2)}</p>
+                    <p className="text-xs text-muted-foreground mt-1">Max: {formatCurrency(foundSale.total)}</p>
                   </div>
 
                   <div>
@@ -212,7 +212,7 @@ const Refunds = () => {
             </div>
             <div>
               <p className="text-sm text-muted-foreground">Total Refunds</p>
-              <p className="text-2xl font-bold text-red-600">${totalRefunds.toFixed(2)}</p>
+              <p className="text-2xl font-bold text-red-600">{formatCurrency(totalRefunds)}</p>
             </div>
           </div>
         </CardContent>
@@ -256,7 +256,7 @@ const Refunds = () => {
                   <TableCell>{refund.sales?.customer_name || 'Walk-in'}</TableCell>
                   <TableCell className="max-w-xs truncate">{refund.reason}</TableCell>
                   <TableCell className="text-right font-medium text-red-600">
-                    -${refund.amount.toFixed(2)}
+                    -{formatCurrency(refund.amount)}
                   </TableCell>
                 </TableRow>
               ))}

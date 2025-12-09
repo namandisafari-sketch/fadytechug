@@ -12,6 +12,7 @@ import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { Wallet, Plus, Trash2 } from 'lucide-react';
+import { formatCurrency } from '@/lib/currency';
 
 const EXPENSE_CATEGORIES = [
   { value: 'utilities', label: 'Utilities' },
@@ -178,12 +179,12 @@ const Expenses = () => {
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <Label>Amount *</Label>
+                  <Label>Amount (UGX) *</Label>
                   <Input
                     type="number"
                     value={amount}
                     onChange={(e) => setAmount(e.target.value)}
-                    placeholder="0.00"
+                    placeholder="0"
                   />
                 </div>
 
@@ -239,7 +240,7 @@ const Expenses = () => {
               </div>
               <div>
                 <p className="text-sm text-muted-foreground">Total Expenses</p>
-                <p className="text-2xl font-bold">${totalExpenses.toFixed(2)}</p>
+                <p className="text-2xl font-bold">{formatCurrency(totalExpenses)}</p>
               </div>
             </div>
           </CardContent>
@@ -249,7 +250,7 @@ const Expenses = () => {
           <Card key={cat}>
             <CardContent className="pt-6">
               <p className="text-sm text-muted-foreground capitalize">{cat}</p>
-              <p className="text-xl font-bold">${total.toFixed(2)}</p>
+              <p className="text-xl font-bold">{formatCurrency(total)}</p>
             </CardContent>
           </Card>
         ))}
@@ -299,7 +300,7 @@ const Expenses = () => {
                   </TableCell>
                   <TableCell className="max-w-xs truncate">{expense.description}</TableCell>
                   <TableCell className="capitalize">{expense.payment_method.replace('_', ' ')}</TableCell>
-                  <TableCell className="text-right font-medium">${expense.amount.toFixed(2)}</TableCell>
+                  <TableCell className="text-right font-medium">{formatCurrency(expense.amount)}</TableCell>
                   {isAdmin && (
                     <TableCell className="text-right">
                       <Button
