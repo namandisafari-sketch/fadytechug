@@ -26,12 +26,18 @@ const Auth = () => {
   const [signupName, setSignupName] = useState('');
 
   useEffect(() => {
-    if (user && !loading) {
-      if (isStaff) {
-        navigate('/admin');
-      } else {
-        navigate('/');
-      }
+    // Only redirect after loading is complete and we have user + role info
+    if (!loading && user) {
+      // Give a small delay to ensure role is fetched
+      const timer = setTimeout(() => {
+        if (isStaff) {
+          navigate('/admin');
+        } else {
+          // Non-staff users go to home page
+          navigate('/');
+        }
+      }, 100);
+      return () => clearTimeout(timer);
     }
   }, [user, loading, isStaff, navigate]);
 
