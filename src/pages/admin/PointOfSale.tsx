@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -8,7 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
-import { Search, Plus, Minus, Trash2, ShoppingCart, Printer, X } from 'lucide-react';
+import { Search, Plus, Minus, Trash2, ShoppingCart, Printer, Barcode, ScanLine } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { formatCurrency } from '@/lib/currency';
 
@@ -18,6 +18,7 @@ interface Product {
   price: number;
   stock_quantity: number;
   category: string;
+  barcode: string | null;
 }
 
 interface CartItem {
@@ -38,10 +39,49 @@ const PointOfSale = () => {
   const [loading, setLoading] = useState(false);
   const [showReceipt, setShowReceipt] = useState(false);
   const [lastSale, setLastSale] = useState<any>(null);
+  const [barcodeInput, setBarcodeInput] = useState('');
+  const [scannerMode, setScannerMode] = useState(false);
+  const barcodeInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     fetchProducts();
   }, []);
+
+  // Auto-focus barcode input when scanner mode is enabled
+  useEffect(() => {
+    if (scannerMode && barcodeInputRef.current) {
+      barcodeInputRef.current.focus();
+    }
+  }, [scannerMode]);
+
+  // Handle barcode scan (works with USB barcode scanners that act as keyboards)
+  const handleBarcodeScan = useCallback(async (barcode: string) => {
+    if (!barcode.trim()) return;
+    
+    // Find product by barcode
+    const product = products.find(p => p.barcode === barcode.trim());
+    
+    if (product) {
+      addToCart(product);
+      toast({ title: 'Product Added', description: `${product.name} added to cart` });
+    } else {
+      toast({ 
+        title: 'Product Not Found', 
+        description: `No product found with barcode: ${barcode}`,
+        variant: 'destructive' 
+      });
+    }
+    
+    setBarcodeInput('');
+  }, [products, toast]);
+
+  // Handle barcode input - triggers on Enter key (USB scanners typically send Enter after barcode)
+  const handleBarcodeKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      handleBarcodeScan(barcodeInput);
+    }
+  };
 
   const fetchProducts = async () => {
     const { data, error } = await supabase
@@ -212,6 +252,43 @@ const PointOfSale = () => {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Products Section */}
         <div className="lg:col-span-2 space-y-4">
+          {/* Barcode Scanner Section */}
+          <Card className={`border-2 ${scannerMode ? 'border-primary bg-primary/5' : 'border-dashed'}`}>
+            <CardContent className="p-4">
+              <div className="flex items-center gap-4">
+                <Button
+                  variant={scannerMode ? "default" : "outline"}
+                  onClick={() => setScannerMode(!scannerMode)}
+                  className="gap-2"
+                >
+                  <ScanLine className="h-4 w-4" />
+                  {scannerMode ? 'Scanner Active' : 'Enable Scanner'}
+                </Button>
+                
+                {scannerMode && (
+                  <div className="flex-1 relative">
+                    <Barcode className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      ref={barcodeInputRef}
+                      placeholder="Scan barcode or type manually..."
+                      value={barcodeInput}
+                      onChange={(e) => setBarcodeInput(e.target.value)}
+                      onKeyDown={handleBarcodeKeyDown}
+                      className="pl-10"
+                      autoFocus
+                    />
+                  </div>
+                )}
+                
+                {!scannerMode && (
+                  <p className="text-sm text-muted-foreground">
+                    Click to enable barcode scanner mode. Works with USB barcode scanners.
+                  </p>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
@@ -232,9 +309,17 @@ const PointOfSale = () => {
                 <CardContent className="p-4">
                   <h3 className="font-medium text-sm line-clamp-2">{product.name}</h3>
                   <p className="text-primary font-bold mt-1">{formatCurrency(product.price)}</p>
-                  <Badge variant="secondary" className="mt-2 text-xs">
-                    Stock: {product.stock_quantity}
-                  </Badge>
+                  <div className="flex items-center gap-2 mt-2">
+                    <Badge variant="secondary" className="text-xs">
+                      Stock: {product.stock_quantity}
+                    </Badge>
+                    {product.barcode && (
+                      <Badge variant="outline" className="text-xs gap-1">
+                        <Barcode className="h-3 w-3" />
+                        {product.barcode}
+                      </Badge>
+                    )}
+                  </div>
                 </CardContent>
               </Card>
             ))}
