@@ -1,4 +1,4 @@
-import { Menu } from "lucide-react";
+import { Menu, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Link } from "react-router-dom";
 import fadyLogo from "@/assets/fady-logo.png";
@@ -25,9 +25,17 @@ const Navbar = () => {
           </nav>
         </div>
 
-        <Button variant="ghost" size="icon" className="md:hidden">
-          <Menu className="h-5 w-5" />
-        </Button>
+        <div className="flex items-center gap-2">
+          <Link to="/install">
+            <Button variant="outline" size="sm" className="gap-2">
+              <Download className="h-4 w-4" />
+              <span className="hidden sm:inline">Install App</span>
+            </Button>
+          </Link>
+          <Button variant="ghost" size="icon" className="md:hidden">
+            <Menu className="h-5 w-5" />
+          </Button>
+        </div>
       </div>
     </header>
   );
