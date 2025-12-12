@@ -14,7 +14,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { Plus, Package, Edit, Trash2, Search, Upload, X, Image, Barcode, Building2, MapPin, Scale, Zap, Check } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
 import { formatCurrency } from '@/lib/currency';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+
 
 const CATEGORIES = ['Routers', 'Switches', 'Cables', 'Servers', 'Accessories', 'Networking', 'Other'];
 const LOCATIONS = ['Warehouse A', 'Warehouse B', 'Store Front', 'Service Center', 'Returns'];
@@ -359,150 +359,147 @@ const Products = () => {
           <DialogTrigger asChild>
             <Button variant="outline"><Plus className="h-4 w-4 mr-2" />Full Details</Button>
           </DialogTrigger>
-          <DialogContent className="max-w-2xl max-h-[90vh]">
+          <DialogContent className="max-w-3xl max-h-[90vh]">
             <DialogHeader>
-              <DialogTitle>{editingProduct ? 'Edit Product' : 'Add Product (Full Details)'}</DialogTitle>
+              <DialogTitle className="text-xl">{editingProduct ? 'Edit Product' : 'Add Product'}</DialogTitle>
             </DialogHeader>
-            <Tabs defaultValue="basic" className="w-full">
-              <TabsList className="grid w-full grid-cols-3">
-                <TabsTrigger value="basic">Basic Info</TabsTrigger>
-                <TabsTrigger value="inventory">Inventory</TabsTrigger>
-                <TabsTrigger value="details">Details</TabsTrigger>
-              </TabsList>
-              
-              <div className="max-h-[60vh] overflow-y-auto mt-4">
-                <TabsContent value="basic" className="space-y-4 mt-0">
-                  {/* Image Upload */}
-                  <div>
-                    <Label>Product Image (Max 2MB)</Label>
-                    <div className="mt-2">
-                      {imagePreview ? (
-                        <div className="relative w-full h-40 rounded-lg overflow-hidden border">
-                          <img src={imagePreview} alt="Preview" className="w-full h-full object-cover" />
-                          <Button size="icon" variant="destructive" className="absolute top-2 right-2 h-8 w-8" onClick={removeImage}>
-                            <X className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      ) : (
-                        <div onClick={() => fileInputRef.current?.click()} className="w-full h-40 border-2 border-dashed rounded-lg flex flex-col items-center justify-center cursor-pointer hover:border-primary transition-colors">
-                          <Upload className="h-8 w-8 text-muted-foreground mb-2" />
-                          <p className="text-sm text-muted-foreground">Click to upload image</p>
-                        </div>
-                      )}
-                      <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleFileSelect} />
+            
+            <div className="max-h-[70vh] overflow-y-auto space-y-4 pr-2">
+              {/* Row 1: Image + Name/Category */}
+              <div className="grid grid-cols-3 gap-4">
+                <div>
+                  {imagePreview ? (
+                    <div className="relative w-full h-32 rounded-lg overflow-hidden border">
+                      <img src={imagePreview} alt="Preview" className="w-full h-full object-cover" />
+                      <Button size="icon" variant="destructive" className="absolute top-1 right-1 h-6 w-6" onClick={removeImage}>
+                        <X className="h-3 w-3" />
+                      </Button>
                     </div>
+                  ) : (
+                    <div onClick={() => fileInputRef.current?.click()} className="w-full h-32 border-2 border-dashed rounded-lg flex flex-col items-center justify-center cursor-pointer hover:border-primary transition-colors">
+                      <Upload className="h-6 w-6 text-muted-foreground mb-1" />
+                      <p className="text-xs text-muted-foreground">Add Image</p>
+                    </div>
+                  )}
+                  <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleFileSelect} />
+                </div>
+                <div className="col-span-2 space-y-3">
+                  <div>
+                    <Label className="text-base font-bold">Product Name *</Label>
+                    <Input value={name} onChange={(e) => setName(e.target.value)} className="h-11 text-base" placeholder="e.g., TP-Link Router" />
                   </div>
-
-                  <div><Label>Name *</Label><Input value={name} onChange={(e) => setName(e.target.value)} /></div>
-                  
-                  <div className="grid grid-cols-2 gap-4">
-                    <div><Label>Category *</Label>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <Label>Category *</Label>
                       <Select value={category} onValueChange={setCategory}>
-                        <SelectTrigger><SelectValue placeholder="Select category" /></SelectTrigger>
+                        <SelectTrigger className="h-10"><SelectValue placeholder="Select..." /></SelectTrigger>
                         <SelectContent>{CATEGORIES.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
                       </Select>
                     </div>
                     <div>
-                      <Label className="flex items-center gap-2"><Building2 className="h-4 w-4" />Manufacturer</Label>
-                      <Input value={manufacturer} onChange={(e) => setManufacturer(e.target.value)} placeholder="e.g., Cisco, TP-Link" />
+                      <Label>Manufacturer</Label>
+                      <Input value={manufacturer} onChange={(e) => setManufacturer(e.target.value)} placeholder="Cisco, TP-Link..." className="h-10" />
                     </div>
                   </div>
+                </div>
+              </div>
 
-                  <div className="grid grid-cols-2 gap-4">
-                    <div><Label>Model</Label><Input value={model} onChange={(e) => setModel(e.target.value)} placeholder="Model number" /></div>
-                    <div><Label>SKU</Label><Input value={sku} onChange={(e) => setSku(e.target.value)} placeholder="Stock keeping unit" /></div>
-                  </div>
+              {/* Row 2: Price & Stock - Most Important */}
+              <div className="grid grid-cols-4 gap-3 p-3 bg-primary/5 rounded-lg border border-primary/20">
+                <div>
+                  <Label className="text-base font-bold">Price (UGX) *</Label>
+                  <Input type="number" value={price} onChange={(e) => setPrice(e.target.value)} className="h-11 text-lg font-semibold" placeholder="150000" />
+                </div>
+                <div>
+                  <Label>Cost (UGX)</Label>
+                  <Input type="number" value={unitCost} onChange={(e) => setUnitCost(e.target.value)} className="h-11" placeholder="120000" />
+                </div>
+                <div>
+                  <Label className="text-base font-bold">Stock *</Label>
+                  <Input type="number" value={stockQuantity} onChange={(e) => setStockQuantity(e.target.value)} className="h-11 text-lg font-semibold" placeholder="10" />
+                </div>
+                <div>
+                  <Label>Condition</Label>
+                  <Select value={condition} onValueChange={setCondition}>
+                    <SelectTrigger className="h-11"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {CONDITIONS.map(c => <SelectItem key={c} value={c} className="capitalize">{c.replace('_', ' ')}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
 
+              {/* Row 3: Identifiers */}
+              <div className="grid grid-cols-4 gap-3">
+                <div>
+                  <Label>Model</Label>
+                  <Input value={model} onChange={(e) => setModel(e.target.value)} placeholder="TL-WR840N" />
+                </div>
+                <div>
+                  <Label>SKU</Label>
+                  <Input value={sku} onChange={(e) => setSku(e.target.value)} placeholder="SKU-001" />
+                </div>
+                <div>
+                  <Label>Barcode</Label>
+                  <Input value={barcode} onChange={(e) => setBarcode(e.target.value)} placeholder="Scan or type" />
+                </div>
+                <div>
+                  <Label>Location</Label>
+                  <Select value={location || "none"} onValueChange={(val) => setLocation(val === "none" ? "" : val)}>
+                    <SelectTrigger><SelectValue placeholder="Where?" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">Not set</SelectItem>
+                      {LOCATIONS.map(loc => <SelectItem key={loc} value={loc}>{loc}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              {/* Row 4: Reorder & Warranty */}
+              <div className="grid grid-cols-4 gap-3">
+                <div>
+                  <Label>Reorder Level</Label>
+                  <Input type="number" value={reorderLevel} onChange={(e) => setReorderLevel(e.target.value)} placeholder="5" />
+                </div>
+                <div>
+                  <Label>Reorder Qty</Label>
+                  <Input type="number" value={reorderQuantity} onChange={(e) => setReorderQuantity(e.target.value)} placeholder="10" />
+                </div>
+                <div>
+                  <Label>Warranty (Months)</Label>
+                  <Input type="number" value={warrantyMonths} onChange={(e) => setWarrantyMonths(e.target.value)} placeholder="12" />
+                </div>
+                <div>
+                  <Label>Weight (kg)</Label>
+                  <Input type="number" step="0.1" value={weightKg} onChange={(e) => setWeightKg(e.target.value)} placeholder="2.5" />
+                </div>
+              </div>
+
+              {/* Row 5: Description & Dimensions */}
+              <div className="grid grid-cols-3 gap-3">
+                <div className="col-span-2">
+                  <Label>Description</Label>
+                  <Textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Product description..." className="h-20" />
+                </div>
+                <div className="space-y-3">
                   <div>
-                    <Label className="flex items-center gap-2"><Barcode className="h-4 w-4" />Barcode</Label>
-                    <Input value={barcode} onChange={(e) => setBarcode(e.target.value)} placeholder="Enter or scan barcode" />
+                    <Label>Dimensions (cm)</Label>
+                    <Input value={dimensions} onChange={(e) => setDimensions(e.target.value)} placeholder="30x20x5" />
                   </div>
-
-                  <div><Label>Description</Label><Textarea value={description} onChange={(e) => setDescription(e.target.value)} /></div>
-                </TabsContent>
-
-                <TabsContent value="inventory" className="space-y-4 mt-0">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div><Label>Selling Price (UGX) *</Label><Input type="number" value={price} onChange={(e) => setPrice(e.target.value)} /></div>
-                    <div><Label>Unit Cost (UGX)</Label><Input type="number" value={unitCost} onChange={(e) => setUnitCost(e.target.value)} placeholder="Cost per unit" /></div>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-4">
-                    <div><Label>Current Stock</Label><Input type="number" value={stockQuantity} onChange={(e) => setStockQuantity(e.target.value)} /></div>
-                    <div>
-                      <Label className="flex items-center gap-2"><MapPin className="h-4 w-4" />Location</Label>
-                      <Select value={location || "none"} onValueChange={(val) => setLocation(val === "none" ? "" : val)}>
-                        <SelectTrigger><SelectValue placeholder="Select location" /></SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="none">Not specified</SelectItem>
-                          {LOCATIONS.map(loc => <SelectItem key={loc} value={loc}>{loc}</SelectItem>)}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <Label>Reorder Level</Label>
-                      <Input type="number" value={reorderLevel} onChange={(e) => setReorderLevel(e.target.value)} />
-                      <p className="text-xs text-muted-foreground mt-1">Alert when stock falls below</p>
-                    </div>
-                    <div>
-                      <Label>Reorder Quantity</Label>
-                      <Input type="number" value={reorderQuantity} onChange={(e) => setReorderQuantity(e.target.value)} />
-                      <p className="text-xs text-muted-foreground mt-1">Suggested quantity to reorder</p>
-                    </div>
-                  </div>
-
-                  <div>
-                    <Label>Condition</Label>
-                    <Select value={condition} onValueChange={setCondition}>
-                      <SelectTrigger><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        {CONDITIONS.map(c => <SelectItem key={c} value={c} className="capitalize">{c.replace('_', ' ')}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </TabsContent>
-
-                <TabsContent value="details" className="space-y-4 mt-0">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <Label>Warranty (Months)</Label>
-                      <Input type="number" value={warrantyMonths} onChange={(e) => setWarrantyMonths(e.target.value)} placeholder="e.g., 12" />
-                    </div>
-                    <div>
-                      <Label className="flex items-center gap-2"><Scale className="h-4 w-4" />Weight (kg)</Label>
-                      <Input type="number" step="0.1" value={weightKg} onChange={(e) => setWeightKg(e.target.value)} placeholder="e.g., 2.5" />
-                    </div>
-                  </div>
-
-                  <div>
-                    <Label>Dimensions (L x W x H cm)</Label>
-                    <Input value={dimensions} onChange={(e) => setDimensions(e.target.value)} placeholder="e.g., 30 x 20 x 5" />
-                  </div>
-
-                  <div className="flex items-center justify-between p-3 bg-muted rounded-lg">
-                    <div>
-                      <Label>Active</Label>
-                      <p className="text-xs text-muted-foreground">Product visible on website</p>
-                    </div>
+                  <div className="flex items-center justify-between p-2 bg-muted rounded">
+                    <Label className="text-sm">Active</Label>
                     <Switch checked={isActive} onCheckedChange={setIsActive} />
                   </div>
-                  
-                  <div className="flex items-center justify-between p-3 bg-muted rounded-lg">
-                    <div>
-                      <Label>Featured</Label>
-                      <p className="text-xs text-muted-foreground">Show on homepage</p>
-                    </div>
+                  <div className="flex items-center justify-between p-2 bg-muted rounded">
+                    <Label className="text-sm">Featured</Label>
                     <Switch checked={isFeatured} onCheckedChange={setIsFeatured} />
                   </div>
-                </TabsContent>
+                </div>
               </div>
-            </Tabs>
+            </div>
             
-            <Button onClick={saveProduct} disabled={loading || uploading} className="w-full mt-4">
-              {uploading ? 'Uploading...' : loading ? 'Saving...' : 'Save Product'}
+            <Button onClick={saveProduct} disabled={loading || uploading} className="w-full h-12 text-lg font-bold mt-4">
+              {uploading ? 'Uploading...' : loading ? 'Saving...' : editingProduct ? 'Update Product' : 'Add Product'}
             </Button>
           </DialogContent>
         </Dialog>
