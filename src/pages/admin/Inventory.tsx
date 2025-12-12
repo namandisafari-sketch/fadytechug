@@ -440,43 +440,35 @@ const Inventory = () => {
         </div>
       </div>
 
-      {/* QUICK STOCK ENTRY - Big and Easy */}
-      <Card className="border-2 border-primary/20 bg-gradient-to-r from-primary/5 to-primary/10">
+      {/* QUICK ADD STOCK - Big and Easy */}
+      <Card className="border-2 border-green-500/30 bg-gradient-to-r from-green-500/5 to-green-500/10">
         <CardHeader className="pb-3">
-          <CardTitle className="flex items-center gap-2 text-xl">
-            <Zap className="h-6 w-6 text-primary" />
-            Quick Stock Entry
-          </CardTitle>
-          <CardDescription className="text-base">
-            Fast and easy - just search, set quantity, and tap the product to update stock
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {/* Mode Selection - Big Buttons */}
-          <div className="grid grid-cols-2 gap-3">
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle className="flex items-center gap-2 text-xl text-green-700 dark:text-green-400">
+                <Plus className="h-6 w-6" />
+                Quick Add Stock
+              </CardTitle>
+              <CardDescription className="text-base">
+                New products arrived? Search → Set quantity → Tap to add!
+              </CardDescription>
+            </div>
             <Button
-              size="lg"
-              variant={quickMode === 'add' ? 'default' : 'outline'}
-              className={`h-16 text-lg font-bold ${quickMode === 'add' ? 'bg-green-600 hover:bg-green-700' : ''}`}
-              onClick={() => setQuickMode('add')}
+              size="sm"
+              variant={quickMode === 'remove' ? 'destructive' : 'outline'}
+              onClick={() => setQuickMode(quickMode === 'add' ? 'remove' : 'add')}
+              className="text-xs"
             >
-              <Plus className="h-6 w-6 mr-2" />
-              ADD STOCK
-            </Button>
-            <Button
-              size="lg"
-              variant={quickMode === 'remove' ? 'default' : 'outline'}
-              className={`h-16 text-lg font-bold ${quickMode === 'remove' ? 'bg-red-600 hover:bg-red-700' : ''}`}
-              onClick={() => setQuickMode('remove')}
-            >
-              <Minus className="h-6 w-6 mr-2" />
-              REMOVE STOCK
+              {quickMode === 'add' ? 'Switch to Remove' : 'Switch to Add'}
             </Button>
           </div>
-
+        </CardHeader>
+        <CardContent className="space-y-4">
           {/* Quantity Selection - Big and Easy */}
-          <div className="flex items-center gap-4">
-            <Label className="text-lg font-medium whitespace-nowrap">Quantity:</Label>
+          <div className="flex flex-wrap items-center gap-4 bg-card p-4 rounded-lg border">
+            <Label className="text-lg font-bold whitespace-nowrap">
+              {quickMode === 'add' ? '➕ Add:' : '➖ Remove:'}
+            </Label>
             <div className="flex items-center gap-2">
               <Button
                 size="lg"
