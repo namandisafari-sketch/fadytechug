@@ -6,6 +6,7 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "@/hooks/useAuth";
 import Index from "./pages/Index";
 import ProductDetail from "./pages/ProductDetail";
+import Install from "./pages/Install";
 import NotFound from "./pages/NotFound";
 import Auth from "./pages/Auth";
 import AdminLayout from "./pages/admin/AdminLayout";
@@ -39,6 +40,7 @@ function App() {
             <Routes>
               <Route path="/" element={<Index />} />
               <Route path="/product/:id" element={<ProductDetail />} />
+              <Route path="/install" element={<Install />} />
               <Route path="/auth" element={<Auth />} />
               
               {/* Admin Routes */}
