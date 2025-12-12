@@ -1,4 +1,5 @@
 import { Facebook, Instagram, Linkedin } from "lucide-react";
+import { usePWA } from "@/hooks/usePWA";
 
 const XIcon = ({ className }: { className?: string }) => (
   <svg className={className} viewBox="0 0 24 24" fill="currentColor">
@@ -14,6 +15,13 @@ const socialLinks = [
 ];
 
 const Footer = () => {
+  const { isStandalone } = usePWA();
+
+  // Hide footer completely when running as installed PWA
+  if (isStandalone) {
+    return null;
+  }
+
   return (
     <footer className="w-full border-t bg-background py-8">
       <div className="container flex flex-col items-center justify-center gap-6">
