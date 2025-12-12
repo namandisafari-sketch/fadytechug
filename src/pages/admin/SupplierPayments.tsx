@@ -278,12 +278,12 @@ const SupplierPayments = () => {
 
               <div className="space-y-2">
                 <Label>Purchase Order (Optional)</Label>
-                <Select value={selectedPO} onValueChange={setSelectedPO}>
+                <Select value={selectedPO || "none"} onValueChange={(val) => setSelectedPO(val === "none" ? "" : val)}>
                   <SelectTrigger>
                     <SelectValue placeholder="Link to purchase order" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">None</SelectItem>
+                    <SelectItem value="none">None</SelectItem>
                     {filteredPOs.map((po) => (
                       <SelectItem key={po.id} value={po.id}>
                         {po.order_number} - {formatCurrency(po.total_amount)}
