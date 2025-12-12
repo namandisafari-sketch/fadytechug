@@ -25,7 +25,8 @@ import {
   Moon,
   Sun,
   UsersRound,
-  Lock
+  Lock,
+  Banknote
 } from 'lucide-react';
 import { useState } from 'react';
 import { cn } from '@/lib/utils';
@@ -42,6 +43,7 @@ const navItems = [
   { path: '/admin/purchase-orders', icon: ShoppingBag, label: 'Purchase Orders' },
   { path: '/admin/expenses', icon: Wallet, label: 'Expenses' },
   { path: '/admin/suppliers', icon: Truck, label: 'Suppliers' },
+  { path: '/admin/supplier-payments', icon: Banknote, label: 'Supplier Payments' },
   { path: '/admin/banking', icon: Building2, label: 'Banking' },
   { path: '/admin/reports', icon: FileText, label: 'Reports' },
   { path: '/admin/customers', icon: Users, label: 'Customers' },
