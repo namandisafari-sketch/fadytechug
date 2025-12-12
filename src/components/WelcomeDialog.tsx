@@ -1,7 +1,13 @@
 import { useState, useEffect } from "react";
 import { MessageCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import fadyLogo from "@/assets/fady-logo.png";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 const WELCOME_SHOWN_KEY = "fady_welcome_shown";
 
@@ -28,22 +34,21 @@ const WelcomeDialog = () => {
     setOpen(false);
   };
 
-  if (!open) return null;
-
   return (
-    <div className="fixed inset-0 z-[100] bg-background flex flex-col items-center justify-center p-6">
-      <div className="flex flex-col items-center max-w-md w-full space-y-8">
-        <img src={fadyLogo} alt="Fady Technologies" className="h-24 w-auto" />
-        
-        <div className="text-center space-y-3">
-          <h1 className="text-2xl font-bold text-foreground">Welcome to Fady Technologies!</h1>
-          <p className="text-muted-foreground">
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader className="text-center space-y-4">
+          <div className="mx-auto w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center">
+            <MessageCircle className="w-8 h-8 text-primary" />
+          </div>
+          <DialogTitle className="text-2xl">Welcome to Fady Technologies!</DialogTitle>
+          <DialogDescription className="text-base">
             Would you like to talk to <span className="font-semibold text-primary">Earn</span>, 
             the developer who made this app?
-          </p>
-        </div>
+          </DialogDescription>
+        </DialogHeader>
         
-        <div className="flex flex-col gap-3 w-full">
+        <div className="flex flex-col gap-3 mt-4">
           <Button 
             onClick={handleTalkToEarn} 
             className="w-full gap-2"
@@ -62,11 +67,11 @@ const WelcomeDialog = () => {
           </Button>
         </div>
 
-        <p className="text-center text-xs text-muted-foreground">
+        <p className="text-center text-xs text-muted-foreground mt-4">
           All prices are in Ugandan Shillings (UGX)
         </p>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 };
 
