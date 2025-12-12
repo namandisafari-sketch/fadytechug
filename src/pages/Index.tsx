@@ -8,6 +8,7 @@ import Footer from "@/components/Footer";
 import BottomNavigation from "@/components/BottomNavigation";
 import PWAHeader from "@/components/PWAHeader";
 import ProductCard from "@/components/ProductCard";
+import WelcomeDialog from "@/components/WelcomeDialog";
 import { products } from "@/data/products";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -35,6 +36,7 @@ const Index = () => {
   if (isStandalone) {
     return (
       <div className="min-h-screen bg-background pb-20">
+        <WelcomeDialog />
         <PWAHeader searchQuery={searchQuery} onSearchChange={setSearchQuery} />
         
         {/* Category Pills */}
@@ -93,6 +95,7 @@ const Index = () => {
   // Regular Web Mode
   return (
     <div className="min-h-screen bg-background">
+      <WelcomeDialog />
       <Navbar />
       <Hero />
       <Categories />
