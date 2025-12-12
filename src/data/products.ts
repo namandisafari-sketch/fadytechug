@@ -2,6 +2,7 @@ import routerImage from "@/assets/product-router.jpg";
 import switchImage from "@/assets/product-switch.jpg";
 import cablesImage from "@/assets/product-cables.jpg";
 import serverImage from "@/assets/product-server.jpg";
+import { formatCurrency } from "@/lib/currency";
 
 export interface Product {
   id: string;
@@ -18,12 +19,12 @@ export interface Product {
   inStock: boolean;
 }
 
-export const products: Product[] = [
+// UGX prices for network equipment
+const productData = [
   {
     id: "1",
     title: "Cisco ISR 4321 Router - Enterprise Grade",
-    price: "$1,299",
-    priceValue: 1299,
+    priceValue: 4800000,
     image: routerImage,
     category: "Routers",
     description: "Enterprise-grade Cisco ISR 4321 Integrated Services Router. Supports up to 50 Mbps aggregate throughput and includes 2 onboard GE, 2 NIM slots, and 4 GB Flash Memory. Perfect for small to medium business networks. Comes with power cable and console cable. Warranty available.",
@@ -40,8 +41,7 @@ export const products: Product[] = [
   {
     id: "2",
     title: "Netgear 24-Port Gigabit Managed Switch",
-    price: "$450",
-    priceValue: 450,
+    priceValue: 1650000,
     image: switchImage,
     category: "Switches",
     description: "Professional-grade 24-port Gigabit managed switch with advanced L2+ features. Ideal for small to medium businesses requiring reliable network infrastructure with VLAN support, QoS, and link aggregation capabilities.",
@@ -58,8 +58,7 @@ export const products: Product[] = [
   {
     id: "3",
     title: "Cat6 Ethernet Cable Bundle - 50 Pack",
-    price: "$89",
-    priceValue: 89,
+    priceValue: 330000,
     image: cablesImage,
     category: "Cables",
     description: "High-quality Cat6 Ethernet cables in a convenient 50-pack bundle. Perfect for data centers, offices, and network installations. Each cable is tested to ensure maximum performance and reliability.",
@@ -76,8 +75,7 @@ export const products: Product[] = [
   {
     id: "4",
     title: "Dell PowerEdge R740 Server - 64GB RAM",
-    price: "$4,500",
-    priceValue: 4500,
+    priceValue: 16650000,
     image: serverImage,
     category: "Servers",
     description: "Dell PowerEdge R740 rack server with 64GB RAM. Enterprise-class 2U rack server designed for demanding workloads. Features dual Intel Xeon processors, extensive storage options, and excellent expandability.",
@@ -94,8 +92,7 @@ export const products: Product[] = [
   {
     id: "5",
     title: "TP-Link Archer AX6000 WiFi 6 Router",
-    price: "$299",
-    priceValue: 299,
+    priceValue: 1100000,
     image: routerImage,
     category: "Routers",
     description: "Next-generation WiFi 6 router with blazing-fast speeds up to 6 Gbps. Features 8 high-gain antennas, 8 Gigabit LAN ports, and advanced security features. Perfect for high-bandwidth home and office networks.",
@@ -112,8 +109,7 @@ export const products: Product[] = [
   {
     id: "6",
     title: "Ubiquiti UniFi 48-Port PoE Switch",
-    price: "$899",
-    priceValue: 899,
+    priceValue: 3320000,
     image: switchImage,
     category: "Switches",
     description: "Enterprise-grade 48-port PoE switch from Ubiquiti's UniFi line. Provides power over Ethernet to compatible devices while offering enterprise performance and reliability. Managed through the intuitive UniFi Controller.",
@@ -130,8 +126,7 @@ export const products: Product[] = [
   {
     id: "7",
     title: "Fiber Optic Patch Cables - LC to SC, 10 Pack",
-    price: "$45",
-    priceValue: 45,
+    priceValue: 165000,
     image: cablesImage,
     category: "Cables",
     description: "Premium fiber optic patch cables with LC to SC connectors. Single-mode fiber for high-speed, long-distance data transmission. Ideal for data centers and enterprise networking installations.",
@@ -148,8 +143,7 @@ export const products: Product[] = [
   {
     id: "8",
     title: "HP ProLiant DL380 Gen10 Server",
-    price: "$3,800",
-    priceValue: 3800,
+    priceValue: 14050000,
     image: serverImage,
     category: "Servers",
     description: "HP ProLiant DL380 Gen10 - the industry-leading 2P rack server. Provides enterprise-class performance, security, and expandability. Ideal for virtualization, database, and high-performance computing workloads.",
@@ -164,6 +158,12 @@ export const products: Product[] = [
     inStock: true,
   },
 ];
+
+// Generate products with formatted UGX prices
+export const products: Product[] = productData.map(product => ({
+  ...product,
+  price: formatCurrency(product.priceValue),
+}));
 
 export const getProductById = (id: string): Product | undefined => {
   return products.find((product) => product.id === id);
