@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -11,7 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
-import { Plus, Package, Edit, Trash2, Search, Upload, X, Image, Barcode, Building2, MapPin, Scale } from 'lucide-react';
+import { Plus, Package, Edit, Trash2, Search, Upload, X, Image, Barcode, Building2, MapPin, Scale, Zap, Check } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
 import { formatCurrency } from '@/lib/currency';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -50,12 +50,21 @@ const Products = () => {
   const { user, isAdmin } = useAuth();
   const { toast } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const quickNameRef = useRef<HTMLInputElement>(null);
   const [products, setProducts] = useState<Product[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
+
+  // Quick Add state
+  const [quickName, setQuickName] = useState('');
+  const [quickCategory, setQuickCategory] = useState('');
+  const [quickPrice, setQuickPrice] = useState('');
+  const [quickStock, setQuickStock] = useState('1');
+  const [quickLoading, setQuickLoading] = useState(false);
+  const [quickSuccess, setQuickSuccess] = useState(false);
 
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
@@ -117,6 +126,60 @@ const Products = () => {
     setImageUrl(null);
     setImageFile(null);
     setImagePreview(null);
+  };
+
+  const resetQuickForm = () => {
+    setQuickName('');
+    setQuickCategory('');
+    setQuickPrice('');
+    setQuickStock('1');
+  };
+
+  const handleQuickAdd = async () => {
+    if (!quickName.trim()) {
+      toast({ title: 'Error', description: 'Product name is required', variant: 'destructive' });
+      quickNameRef.current?.focus();
+      return;
+    }
+    if (!quickCategory) {
+      toast({ title: 'Error', description: 'Please select a category', variant: 'destructive' });
+      return;
+    }
+    if (!quickPrice || parseFloat(quickPrice) <= 0) {
+      toast({ title: 'Error', description: 'Please enter a valid price', variant: 'destructive' });
+      return;
+    }
+
+    setQuickLoading(true);
+
+    try {
+      const { error } = await supabase.from('products').insert({
+        name: quickName.trim(),
+        category: quickCategory,
+        price: parseFloat(quickPrice),
+        stock_quantity: parseInt(quickStock) || 1,
+        is_active: true,
+        condition: 'new',
+        created_by: user?.id
+      });
+
+      if (error) throw error;
+
+      // Show success animation
+      setQuickSuccess(true);
+      setTimeout(() => setQuickSuccess(false), 1500);
+
+      toast({ title: 'Product Added!', description: `${quickName} has been added to inventory` });
+      
+      resetQuickForm();
+      fetchProducts();
+      quickNameRef.current?.focus();
+
+    } catch (error: any) {
+      toast({ title: 'Error', description: error.message, variant: 'destructive' });
+    } finally {
+      setQuickLoading(false);
+    }
   };
 
   const openEditDialog = (product: Product) => {
@@ -294,11 +357,11 @@ const Products = () => {
         </div>
         <Dialog open={dialogOpen} onOpenChange={(open) => { setDialogOpen(open); if (!open) resetForm(); }}>
           <DialogTrigger asChild>
-            <Button><Plus className="h-4 w-4 mr-2" />Add Product</Button>
+            <Button variant="outline"><Plus className="h-4 w-4 mr-2" />Full Details</Button>
           </DialogTrigger>
           <DialogContent className="max-w-2xl max-h-[90vh]">
             <DialogHeader>
-              <DialogTitle>{editingProduct ? 'Edit Product' : 'Add Product'}</DialogTitle>
+              <DialogTitle>{editingProduct ? 'Edit Product' : 'Add Product (Full Details)'}</DialogTitle>
             </DialogHeader>
             <Tabs defaultValue="basic" className="w-full">
               <TabsList className="grid w-full grid-cols-3">
@@ -368,9 +431,12 @@ const Products = () => {
                     <div><Label>Current Stock</Label><Input type="number" value={stockQuantity} onChange={(e) => setStockQuantity(e.target.value)} /></div>
                     <div>
                       <Label className="flex items-center gap-2"><MapPin className="h-4 w-4" />Location</Label>
-                      <Select value={location} onValueChange={setLocation}>
+                      <Select value={location || "none"} onValueChange={(val) => setLocation(val === "none" ? "" : val)}>
                         <SelectTrigger><SelectValue placeholder="Select location" /></SelectTrigger>
-                        <SelectContent>{LOCATIONS.map(loc => <SelectItem key={loc} value={loc}>{loc}</SelectItem>)}</SelectContent>
+                        <SelectContent>
+                          <SelectItem value="none">Not specified</SelectItem>
+                          {LOCATIONS.map(loc => <SelectItem key={loc} value={loc}>{loc}</SelectItem>)}
+                        </SelectContent>
                       </Select>
                     </div>
                   </div>
@@ -441,6 +507,104 @@ const Products = () => {
           </DialogContent>
         </Dialog>
       </div>
+
+      {/* QUICK ADD PRODUCT - Simple and Fast */}
+      <Card className="border-2 border-primary/30 bg-gradient-to-r from-primary/5 to-primary/10">
+        <CardHeader className="pb-3">
+          <CardTitle className="flex items-center gap-2 text-xl">
+            <Zap className="h-6 w-6 text-primary" />
+            Quick Add Product
+          </CardTitle>
+          <CardDescription className="text-base">
+            Add new products fast! Just fill in the basics and click Add.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className={`grid grid-cols-1 md:grid-cols-5 gap-4 items-end transition-all ${quickSuccess ? 'opacity-50' : ''}`}>
+            {/* Product Name */}
+            <div className="md:col-span-2">
+              <Label className="text-base font-bold">Product Name *</Label>
+              <Input
+                ref={quickNameRef}
+                value={quickName}
+                onChange={(e) => setQuickName(e.target.value)}
+                placeholder="e.g., TP-Link Router TL-WR840N"
+                className="h-12 text-lg"
+                onKeyDown={(e) => e.key === 'Enter' && handleQuickAdd()}
+              />
+            </div>
+
+            {/* Category */}
+            <div>
+              <Label className="text-base font-bold">Category *</Label>
+              <Select value={quickCategory} onValueChange={setQuickCategory}>
+                <SelectTrigger className="h-12 text-base">
+                  <SelectValue placeholder="Select..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {CATEGORIES.map(c => (
+                    <SelectItem key={c} value={c} className="text-base">{c}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Price */}
+            <div>
+              <Label className="text-base font-bold">Price (UGX) *</Label>
+              <Input
+                type="number"
+                value={quickPrice}
+                onChange={(e) => setQuickPrice(e.target.value)}
+                placeholder="150000"
+                className="h-12 text-lg"
+                min="0"
+                onKeyDown={(e) => e.key === 'Enter' && handleQuickAdd()}
+              />
+            </div>
+
+            {/* Stock & Add Button */}
+            <div className="flex gap-2">
+              <div className="w-20">
+                <Label className="text-base font-bold">Stock</Label>
+                <Input
+                  type="number"
+                  value={quickStock}
+                  onChange={(e) => setQuickStock(e.target.value)}
+                  className="h-12 text-lg text-center"
+                  min="0"
+                />
+              </div>
+              <div className="flex-1">
+                <Label className="text-base invisible">Add</Label>
+                <Button
+                  onClick={handleQuickAdd}
+                  disabled={quickLoading}
+                  className={`h-12 w-full text-lg font-bold ${quickSuccess ? 'bg-green-600' : ''}`}
+                >
+                  {quickSuccess ? (
+                    <>
+                      <Check className="h-5 w-5 mr-2" />
+                      Added!
+                    </>
+                  ) : quickLoading ? (
+                    'Adding...'
+                  ) : (
+                    <>
+                      <Plus className="h-5 w-5 mr-2" />
+                      Add
+                    </>
+                  )}
+                </Button>
+              </div>
+            </div>
+          </div>
+
+          <p className="text-sm text-muted-foreground mt-3">
+            Need to add more details? Use the "Full Details" button above to add images, barcodes, manufacturer info, and more.
+          </p>
+        </CardContent>
+      </Card>
 
       <div className="relative">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
