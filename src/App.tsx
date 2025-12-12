@@ -4,6 +4,8 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "@/hooks/useAuth";
+import { usePWA } from "@/hooks/usePWA";
+import PWASplashScreen from "@/components/PWASplashScreen";
 import Index from "./pages/Index";
 import ProductDetail from "./pages/ProductDetail";
 import Install from "./pages/Install";
@@ -29,43 +31,57 @@ import StaffManagement from "./pages/admin/StaffManagement";
 
 const queryClient = new QueryClient();
 
+function AppContent() {
+  const { isLoading, isStandalone } = usePWA();
+
+  if (isLoading && isStandalone) {
+    return <PWASplashScreen />;
+  }
+
+  return (
+    <>
+      <Toaster />
+      <Sonner />
+      <BrowserRouter>
+        <Routes>
+          <Route path="/" element={<Index />} />
+          <Route path="/product/:id" element={<ProductDetail />} />
+          <Route path="/install" element={<Install />} />
+          <Route path="/auth" element={<Auth />} />
+          
+          {/* Admin Routes */}
+          <Route path="/admin" element={<AdminLayout />}>
+            <Route index element={<Dashboard />} />
+            <Route path="pos" element={<PointOfSale />} />
+            <Route path="products" element={<Products />} />
+            <Route path="inventory" element={<Inventory />} />
+            <Route path="sales" element={<Sales />} />
+            <Route path="purchase-orders" element={<PurchaseOrders />} />
+            <Route path="expenses" element={<Expenses />} />
+            <Route path="suppliers" element={<Suppliers />} />
+            
+            <Route path="banking" element={<Banking />} />
+            <Route path="reports" element={<Reports />} />
+            <Route path="serial-numbers" element={<SerialNumbers />} />
+            <Route path="customers" element={<Customers />} />
+            <Route path="inquiries" element={<Inquiries />} />
+            <Route path="settings" element={<Settings />} />
+            <Route path="staff" element={<StaffManagement />} />
+          </Route>
+          
+          <Route path="*" element={<NotFound />} />
+        </Routes>
+      </BrowserRouter>
+    </>
+  );
+}
+
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
         <TooltipProvider>
-          <Toaster />
-          <Sonner />
-          <BrowserRouter>
-            <Routes>
-              <Route path="/" element={<Index />} />
-              <Route path="/product/:id" element={<ProductDetail />} />
-              <Route path="/install" element={<Install />} />
-              <Route path="/auth" element={<Auth />} />
-              
-              {/* Admin Routes */}
-              <Route path="/admin" element={<AdminLayout />}>
-                <Route index element={<Dashboard />} />
-                <Route path="pos" element={<PointOfSale />} />
-                <Route path="products" element={<Products />} />
-                <Route path="inventory" element={<Inventory />} />
-                <Route path="sales" element={<Sales />} />
-                <Route path="purchase-orders" element={<PurchaseOrders />} />
-                <Route path="expenses" element={<Expenses />} />
-                <Route path="suppliers" element={<Suppliers />} />
-                
-                <Route path="banking" element={<Banking />} />
-                <Route path="reports" element={<Reports />} />
-                <Route path="serial-numbers" element={<SerialNumbers />} />
-                <Route path="customers" element={<Customers />} />
-                <Route path="inquiries" element={<Inquiries />} />
-                <Route path="settings" element={<Settings />} />
-                <Route path="staff" element={<StaffManagement />} />
-              </Route>
-              
-              <Route path="*" element={<NotFound />} />
-            </Routes>
-          </BrowserRouter>
+          <AppContent />
         </TooltipProvider>
       </AuthProvider>
     </QueryClientProvider>
