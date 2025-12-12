@@ -19,7 +19,7 @@ import { formatCurrency } from '@/lib/currency';
 const CATEGORIES = ['Routers', 'Switches', 'Cables', 'Servers', 'Accessories', 'Networking', 'Other'];
 const LOCATIONS = ['Warehouse A', 'Warehouse B', 'Store Front', 'Service Center', 'Returns'];
 const CONDITIONS = ['new', 'refurbished', 'open_box', 'used_like_new', 'used_good', 'damaged'];
-const MAX_FILE_SIZE = 2 * 1024 * 1024; // 2MB
+const MAX_FILE_SIZE = 200 * 1024; // 200KB
 
 interface Product {
   id: string;
@@ -217,7 +217,7 @@ const Products = () => {
     if (file.size > MAX_FILE_SIZE) {
       toast({ 
         title: 'File too large', 
-        description: 'Maximum file size is 2MB', 
+        description: 'Maximum file size is 200KB', 
         variant: 'destructive' 
       });
       return;
