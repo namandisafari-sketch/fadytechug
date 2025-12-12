@@ -42,6 +42,11 @@ const Banking = () => {
   const [cashRegister, setCashRegister] = useState<CashRegister | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [bankBalance, setBankBalance] = useState(0);
+  const [cashExpenses, setCashExpenses] = useState(0);
+  const [bankExpenses, setBankExpenses] = useState(0);
+  const [cashSupplierPayments, setCashSupplierPayments] = useState(0);
+  const [bankSupplierPayments, setBankSupplierPayments] = useState(0);
 
   // Form state
   const [amount, setAmount] = useState('');
@@ -54,6 +59,7 @@ const Banking = () => {
   useEffect(() => {
     fetchDeposits();
     fetchTodayCashRegister();
+    fetchBalances();
   }, []);
 
   const fetchDeposits = async () => {
@@ -63,6 +69,45 @@ const Banking = () => {
       .order('deposit_date', { ascending: false });
 
     if (!error) setDeposits(data || []);
+  };
+
+  const fetchBalances = async () => {
+    // Get total deposits to bank
+    const { data: allDeposits } = await supabase
+      .from('bank_deposits')
+      .select('amount');
+    const totalDeposited = allDeposits?.reduce((sum, d) => sum + d.amount, 0) || 0;
+
+    // Get expenses by source
+    const { data: expensesFromCash } = await supabase
+      .from('expenses')
+      .select('amount')
+      .eq('payment_source', 'cash_register');
+    setCashExpenses(expensesFromCash?.reduce((sum, e) => sum + e.amount, 0) || 0);
+
+    const { data: expensesFromBank } = await supabase
+      .from('expenses')
+      .select('amount')
+      .eq('payment_source', 'bank');
+    const bankExp = expensesFromBank?.reduce((sum, e) => sum + e.amount, 0) || 0;
+    setBankExpenses(bankExp);
+
+    // Get supplier payments by source
+    const { data: supplierPaymentsFromCash } = await supabase
+      .from('supplier_payments')
+      .select('amount')
+      .eq('payment_source', 'cash_register');
+    setCashSupplierPayments(supplierPaymentsFromCash?.reduce((sum, p) => sum + p.amount, 0) || 0);
+
+    const { data: supplierPaymentsFromBank } = await supabase
+      .from('supplier_payments')
+      .select('amount')
+      .eq('payment_source', 'bank');
+    const bankSupp = supplierPaymentsFromBank?.reduce((sum, p) => sum + p.amount, 0) || 0;
+    setBankSupplierPayments(bankSupp);
+
+    // Calculate bank balance
+    setBankBalance(totalDeposited - bankExp - bankSupp);
   };
 
   const fetchTodayCashRegister = async () => {
@@ -86,14 +131,23 @@ const Banking = () => {
 
     const totalRefunds = refundsData?.reduce((sum, r) => sum + r.amount, 0) || 0;
 
-    // Get today's expenses (cash only)
+    // Get today's expenses paid from cash register only
     const { data: expensesData } = await supabase
       .from('expenses')
       .select('amount')
       .eq('expense_date', today)
-      .eq('payment_method', 'cash');
+      .eq('payment_source', 'cash_register');
 
     const totalExpenses = expensesData?.reduce((sum, e) => sum + e.amount, 0) || 0;
+
+    // Get today's supplier payments from cash register
+    const { data: supplierPaymentsData } = await supabase
+      .from('supplier_payments')
+      .select('amount')
+      .eq('payment_date', today)
+      .eq('payment_source', 'cash_register');
+
+    const totalSupplierPayments = supplierPaymentsData?.reduce((sum, p) => sum + p.amount, 0) || 0;
 
     // Get today's deposits
     const { data: depositsData } = await supabase
@@ -112,7 +166,7 @@ const Banking = () => {
 
     if (existingRegister) {
       // Update with current totals
-      const closing = existingRegister.opening_balance + totalSales - totalRefunds - totalExpenses - totalDeposits;
+      const closing = existingRegister.opening_balance + totalSales - totalRefunds - totalExpenses - totalSupplierPayments - totalDeposits;
       
       await supabase
         .from('cash_register')
@@ -146,7 +200,7 @@ const Banking = () => {
         .maybeSingle();
 
       const openingBalance = yesterdayRegister?.closing_balance || 0;
-      const closing = openingBalance + totalSales - totalRefunds - totalExpenses - totalDeposits;
+      const closing = openingBalance + totalSales - totalRefunds - totalExpenses - totalSupplierPayments - totalDeposits;
 
       const { data: newRegister, error } = await supabase
         .from('cash_register')
@@ -194,6 +248,7 @@ const Banking = () => {
       resetForm();
       fetchDeposits();
       fetchTodayCashRegister();
+      fetchBalances();
 
     } catch (error: any) {
       toast({ title: 'Error', description: error.message, variant: 'destructive' });
@@ -344,31 +399,53 @@ const Banking = () => {
         </Card>
       )}
 
-      {/* Stats */}
+      {/* Available Balances */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <Card>
-          <CardContent className="pt-6">
-            <div className="flex items-center gap-4">
-              <div className="p-3 bg-blue-100 rounded-lg">
-                <Building2 className="h-6 w-6 text-blue-600" />
+        <Card className="border-green-500/50 bg-green-50/50 dark:bg-green-950/20">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-lg flex items-center gap-2">
+              <Wallet className="h-5 w-5 text-green-600" />
+              Cash Register Balance
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-3xl font-bold text-green-600">{formatCurrency(cashRegister?.closing_balance || 0)}</p>
+            <p className="text-xs text-muted-foreground mt-2">Available revenue from daily operations</p>
+            <div className="mt-4 space-y-1 text-sm">
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Expenses paid from cash:</span>
+                <span className="text-red-600">-{formatCurrency(cashExpenses)}</span>
               </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Total Deposited</p>
-                <p className="text-2xl font-bold">{formatCurrency(totalDeposited)}</p>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Supplier payments from cash:</span>
+                <span className="text-red-600">-{formatCurrency(cashSupplierPayments)}</span>
               </div>
             </div>
           </CardContent>
         </Card>
 
-        <Card>
-          <CardContent className="pt-6">
-            <div className="flex items-center gap-4">
-              <div className="p-3 bg-green-100 rounded-lg">
-                <DollarSign className="h-6 w-6 text-green-600" />
+        <Card className="border-blue-500/50 bg-blue-50/50 dark:bg-blue-950/20">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-lg flex items-center gap-2">
+              <Building2 className="h-5 w-5 text-blue-600" />
+              Bank Account Balance
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-3xl font-bold text-blue-600">{formatCurrency(bankBalance)}</p>
+            <p className="text-xs text-muted-foreground mt-2">Total deposits minus bank withdrawals</p>
+            <div className="mt-4 space-y-1 text-sm">
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Total deposited:</span>
+                <span className="text-green-600">+{formatCurrency(totalDeposited)}</span>
               </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Total Deposits</p>
-                <p className="text-2xl font-bold">{deposits.length}</p>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Expenses from bank:</span>
+                <span className="text-red-600">-{formatCurrency(bankExpenses)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Supplier payments from bank:</span>
+                <span className="text-red-600">-{formatCurrency(bankSupplierPayments)}</span>
               </div>
             </div>
           </CardContent>

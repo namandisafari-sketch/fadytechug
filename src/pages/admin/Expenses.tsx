@@ -31,6 +31,7 @@ interface Expense {
   description: string;
   amount: number;
   payment_method: string;
+  payment_source: 'cash_register' | 'bank';
   expense_date: string;
   notes: string | null;
   created_at: string;
@@ -44,6 +45,7 @@ const Expenses = () => {
   const [description, setDescription] = useState('');
   const [amount, setAmount] = useState('');
   const [paymentMethod, setPaymentMethod] = useState('cash');
+  const [paymentSource, setPaymentSource] = useState<'cash_register' | 'bank'>('cash_register');
   const [expenseDate, setExpenseDate] = useState(new Date().toISOString().split('T')[0]);
   const [notes, setNotes] = useState('');
   const [loading, setLoading] = useState(false);
@@ -84,6 +86,7 @@ const Expenses = () => {
           description,
           amount: parseFloat(amount),
           payment_method: paymentMethod as any,
+          payment_source: paymentSource as any,
           expense_date: expenseDate,
           notes: notes || null,
           created_by: user?.id
@@ -124,6 +127,7 @@ const Expenses = () => {
     setDescription('');
     setAmount('');
     setPaymentMethod('cash');
+    setPaymentSource('cash_register');
     setExpenseDate(new Date().toISOString().split('T')[0]);
     setNotes('');
   };
@@ -196,6 +200,20 @@ const Expenses = () => {
                     onChange={(e) => setExpenseDate(e.target.value)}
                   />
                 </div>
+              </div>
+
+              <div>
+                <Label>Payment Source *</Label>
+                <Select value={paymentSource} onValueChange={(val) => setPaymentSource(val as 'cash_register' | 'bank')}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="cash_register">Cash Register (Available Revenue)</SelectItem>
+                    <SelectItem value="bank">Bank Account</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground mt-1">Where will this expense be deducted from?</p>
               </div>
 
               <div>
@@ -286,6 +304,7 @@ const Expenses = () => {
                 <TableHead>Date</TableHead>
                 <TableHead>Category</TableHead>
                 <TableHead>Description</TableHead>
+                <TableHead>Source</TableHead>
                 <TableHead>Payment</TableHead>
                 <TableHead className="text-right">Amount</TableHead>
                 {isAdmin && <TableHead className="text-right">Actions</TableHead>}
@@ -299,6 +318,11 @@ const Expenses = () => {
                     <Badge variant="outline" className="capitalize">{expense.category}</Badge>
                   </TableCell>
                   <TableCell className="max-w-xs truncate">{expense.description}</TableCell>
+                  <TableCell>
+                    <Badge variant={expense.payment_source === 'bank' ? 'secondary' : 'default'}>
+                      {expense.payment_source === 'bank' ? 'Bank' : 'Cash Register'}
+                    </Badge>
+                  </TableCell>
                   <TableCell className="capitalize">{expense.payment_method.replace('_', ' ')}</TableCell>
                   <TableCell className="text-right font-medium">{formatCurrency(expense.amount)}</TableCell>
                   {isAdmin && (
@@ -317,7 +341,7 @@ const Expenses = () => {
               ))}
               {expenses.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
+                  <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
                     No expenses recorded
                   </TableCell>
                 </TableRow>
