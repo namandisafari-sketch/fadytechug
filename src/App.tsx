@@ -19,6 +19,7 @@ import Inventory from "./pages/admin/Inventory";
 import Sales from "./pages/admin/Sales";
 import Expenses from "./pages/admin/Expenses";
 import Suppliers from "./pages/admin/Suppliers";
+import SupplierPayments from "./pages/admin/SupplierPayments";
 import Banking from "./pages/admin/Banking";
 import PurchaseOrders from "./pages/admin/PurchaseOrders";
 import Reports from "./pages/admin/Reports";
@@ -50,6 +51,7 @@ function App() {
                 <Route path="purchase-orders" element={<PurchaseOrders />} />
                 <Route path="expenses" element={<Expenses />} />
                 <Route path="suppliers" element={<Suppliers />} />
+                <Route path="supplier-payments" element={<SupplierPayments />} />
                 <Route path="banking" element={<Banking />} />
                 <Route path="reports" element={<Reports />} />
                 <Route path="serial-numbers" element={<SerialNumbers />} />
