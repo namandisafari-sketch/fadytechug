@@ -42,6 +42,7 @@ interface SupplierPayment {
   amount: number;
   payment_date: string;
   payment_method: string;
+  payment_source: 'cash_register' | 'bank';
   bank_name: string | null;
   reference_number: string | null;
   notes: string | null;
@@ -78,6 +79,7 @@ const Suppliers = () => {
   const [referenceNumber, setReferenceNumber] = useState('');
   const [paymentNotes, setPaymentNotes] = useState('');
   const [selectedPO, setSelectedPO] = useState('');
+  const [paymentSource, setPaymentSource] = useState<'cash_register' | 'bank'>('bank');
   const [paymentLoading, setPaymentLoading] = useState(false);
 
   // Receipt dialog state
@@ -88,6 +90,7 @@ const Suppliers = () => {
     amount: number;
     paymentDate: string;
     paymentMethod: string;
+    paymentSource: 'cash_register' | 'bank';
     bankName: string | null;
     referenceNumber: string | null;
     notes: string | null;
@@ -163,6 +166,7 @@ const Suppliers = () => {
     setPaymentAmount('');
     setPaymentDate(format(new Date(), 'yyyy-MM-dd'));
     setPaymentMethod('bank_transfer');
+    setPaymentSource('bank');
     setBankName('');
     setReferenceNumber('');
     setPaymentNotes('');
@@ -257,6 +261,7 @@ const Suppliers = () => {
         amount: parseFloat(paymentAmount),
         payment_date: paymentDate,
         payment_method: paymentMethod,
+        payment_source: paymentSource as any,
         bank_name: bankName || null,
         reference_number: referenceNumber ? `${receiptNumber} - ${referenceNumber}` : receiptNumber,
         notes: paymentNotes || null,
@@ -279,6 +284,7 @@ const Suppliers = () => {
         amount: parseFloat(paymentAmount),
         paymentDate,
         paymentMethod,
+        paymentSource,
         bankName: bankName || null,
         referenceNumber: referenceNumber || null,
         notes: paymentNotes || null,
@@ -572,6 +578,20 @@ const Suppliers = () => {
             </div>
 
             <div>
+              <Label>Payment Source *</Label>
+              <Select value={paymentSource} onValueChange={(val) => setPaymentSource(val as 'cash_register' | 'bank')}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="cash_register">Cash Register (Available Revenue)</SelectItem>
+                  <SelectItem value="bank">Bank Account</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground mt-1">Where will this payment be deducted from?</p>
+            </div>
+
+            <div>
               <Label>Payment Method *</Label>
               <Select value={paymentMethod} onValueChange={setPaymentMethod}>
                 <SelectTrigger>
@@ -686,6 +706,10 @@ const Suppliers = () => {
                     </div>
                   )}
                   <div className="flex justify-between">
+                    <span className="font-medium">Payment Source:</span>
+                    <span>{receiptData.paymentSource === 'bank' ? 'Bank Account' : 'Cash Register'}</span>
+                  </div>
+                  <div className="flex justify-between">
                     <span className="font-medium">Payment Method:</span>
                     <span>{getPaymentMethodLabel(receiptData.paymentMethod)}</span>
                   </div>
@@ -763,6 +787,7 @@ const Suppliers = () => {
                   <TableRow>
                     <TableHead>Date</TableHead>
                     <TableHead>Amount</TableHead>
+                    <TableHead>Source</TableHead>
                     <TableHead>Method</TableHead>
                     <TableHead>Reference</TableHead>
                     <TableHead>PO</TableHead>
@@ -773,6 +798,11 @@ const Suppliers = () => {
                     <TableRow key={payment.id}>
                       <TableCell>{format(new Date(payment.payment_date), 'dd MMM yyyy')}</TableCell>
                       <TableCell className="font-medium">{formatCurrency(payment.amount)}</TableCell>
+                      <TableCell>
+                        <Badge variant={payment.payment_source === 'bank' ? 'secondary' : 'default'} className="text-xs">
+                          {payment.payment_source === 'bank' ? 'Bank' : 'Cash'}
+                        </Badge>
+                      </TableCell>
                       <TableCell>{getPaymentMethodLabel(payment.payment_method)}</TableCell>
                       <TableCell className="text-xs">{payment.reference_number || '-'}</TableCell>
                       <TableCell>{payment.purchase_orders?.order_number || '-'}</TableCell>

@@ -139,6 +139,7 @@ export type Database = {
           id: string
           notes: string | null
           payment_method: Database["public"]["Enums"]["payment_method"]
+          payment_source: Database["public"]["Enums"]["payment_source"]
           receipt_url: string | null
         }
         Insert: {
@@ -151,6 +152,7 @@ export type Database = {
           id?: string
           notes?: string | null
           payment_method?: Database["public"]["Enums"]["payment_method"]
+          payment_source?: Database["public"]["Enums"]["payment_source"]
           receipt_url?: string | null
         }
         Update: {
@@ -163,6 +165,7 @@ export type Database = {
           id?: string
           notes?: string | null
           payment_method?: Database["public"]["Enums"]["payment_method"]
+          payment_source?: Database["public"]["Enums"]["payment_source"]
           receipt_url?: string | null
         }
         Relationships: []
@@ -794,6 +797,7 @@ export type Database = {
           paid_by: string | null
           payment_date: string
           payment_method: string
+          payment_source: Database["public"]["Enums"]["payment_source"]
           purchase_order_id: string | null
           reference_number: string | null
           supplier_id: string
@@ -807,6 +811,7 @@ export type Database = {
           paid_by?: string | null
           payment_date?: string
           payment_method?: string
+          payment_source?: Database["public"]["Enums"]["payment_source"]
           purchase_order_id?: string | null
           reference_number?: string | null
           supplier_id: string
@@ -820,6 +825,7 @@ export type Database = {
           paid_by?: string | null
           payment_date?: string
           payment_method?: string
+          payment_source?: Database["public"]["Enums"]["payment_source"]
           purchase_order_id?: string | null
           reference_number?: string | null
           supplier_id?: string
@@ -938,6 +944,7 @@ export type Database = {
         | "mobile_money"
         | "bank_transfer"
         | "credit"
+      payment_source: "cash_register" | "bank"
       transaction_type: "sale" | "purchase" | "adjustment" | "return" | "damage"
     }
     CompositeTypes: {
@@ -1084,6 +1091,7 @@ export const Constants = {
         "bank_transfer",
         "credit",
       ],
+      payment_source: ["cash_register", "bank"],
       transaction_type: ["sale", "purchase", "adjustment", "return", "damage"],
     },
   },
