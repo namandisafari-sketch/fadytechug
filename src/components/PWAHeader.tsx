@@ -1,5 +1,7 @@
-import { Search } from "lucide-react";
+import { Search, Moon, Sun } from "lucide-react";
 import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { useTheme } from "@/hooks/useTheme";
 import fadyLogo from "@/assets/fady-logo.png";
 
 interface PWAHeaderProps {
@@ -8,6 +10,8 @@ interface PWAHeaderProps {
 }
 
 const PWAHeader = ({ searchQuery, onSearchChange }: PWAHeaderProps) => {
+  const { theme, toggleTheme } = useTheme();
+
   return (
     <header className="sticky top-0 z-50 bg-background border-b safe-area-top">
       <div className="flex items-center gap-3 px-4 py-3">
@@ -21,6 +25,18 @@ const PWAHeader = ({ searchQuery, onSearchChange }: PWAHeaderProps) => {
             className="pl-9 h-10 bg-muted/50 border-0"
           />
         </div>
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={toggleTheme}
+          className="flex-shrink-0"
+        >
+          {theme === 'dark' ? (
+            <Sun className="h-5 w-5" />
+          ) : (
+            <Moon className="h-5 w-5" />
+          )}
+        </Button>
       </div>
     </header>
   );

@@ -1,13 +1,7 @@
 import { useState, useEffect } from "react";
-import { MessageCircle, X } from "lucide-react";
+import { MessageCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import fadyLogo from "@/assets/fady-logo.png";
 
 const WELCOME_SHOWN_KEY = "fady_welcome_shown";
 
@@ -15,10 +9,8 @@ const WelcomeDialog = () => {
   const [open, setOpen] = useState(false);
 
   useEffect(() => {
-    // Check if we've shown the welcome dialog in this session
     const hasShown = sessionStorage.getItem(WELCOME_SHOWN_KEY);
     if (!hasShown) {
-      // Small delay for better UX
       const timer = setTimeout(() => {
         setOpen(true);
         sessionStorage.setItem(WELCOME_SHOWN_KEY, "true");
@@ -36,21 +28,22 @@ const WelcomeDialog = () => {
     setOpen(false);
   };
 
+  if (!open) return null;
+
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader className="text-center space-y-4">
-          <div className="mx-auto w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center">
-            <MessageCircle className="w-8 h-8 text-primary" />
-          </div>
-          <DialogTitle className="text-2xl">Welcome to Fady Technologies!</DialogTitle>
-          <DialogDescription className="text-base">
+    <div className="fixed inset-0 z-[100] bg-background flex flex-col items-center justify-center p-6">
+      <div className="flex flex-col items-center max-w-md w-full space-y-8">
+        <img src={fadyLogo} alt="Fady Technologies" className="h-24 w-auto" />
+        
+        <div className="text-center space-y-3">
+          <h1 className="text-2xl font-bold text-foreground">Welcome to Fady Technologies!</h1>
+          <p className="text-muted-foreground">
             Would you like to talk to <span className="font-semibold text-primary">Earn</span>, 
             the developer who made this app?
-          </DialogDescription>
-        </DialogHeader>
+          </p>
+        </div>
         
-        <div className="flex flex-col gap-3 mt-4">
+        <div className="flex flex-col gap-3 w-full">
           <Button 
             onClick={handleTalkToEarn} 
             className="w-full gap-2"
@@ -69,11 +62,11 @@ const WelcomeDialog = () => {
           </Button>
         </div>
 
-        <p className="text-center text-xs text-muted-foreground mt-4">
+        <p className="text-center text-xs text-muted-foreground">
           All prices are in Ugandan Shillings (UGX)
         </p>
-      </DialogContent>
-    </Dialog>
+      </div>
+    </div>
   );
 };
 
