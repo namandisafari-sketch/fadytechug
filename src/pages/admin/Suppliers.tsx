@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -7,11 +7,14 @@ import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
-import { Truck, Plus, Edit, Trash2, Search } from 'lucide-react';
+import { Truck, Plus, Edit, Trash2, Search, CreditCard, Receipt, Printer, History } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
+import { formatCurrency } from '@/lib/currency';
+import { format } from 'date-fns';
 
 interface Supplier {
   id: string;
@@ -25,8 +28,29 @@ interface Supplier {
   created_at: string;
 }
 
+interface PurchaseOrder {
+  id: string;
+  order_number: string;
+  total_amount: number;
+  status: string;
+}
+
+interface SupplierPayment {
+  id: string;
+  supplier_id: string;
+  purchase_order_id: string | null;
+  amount: number;
+  payment_date: string;
+  payment_method: string;
+  bank_name: string | null;
+  reference_number: string | null;
+  notes: string | null;
+  created_at: string;
+  purchase_orders?: { order_number: string } | null;
+}
+
 const Suppliers = () => {
-  const { isAdmin } = useAuth();
+  const { isAdmin, user } = useAuth();
   const { toast } = useToast();
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
@@ -43,6 +67,40 @@ const Suppliers = () => {
   const [notes, setNotes] = useState('');
   const [isActive, setIsActive] = useState(true);
 
+  // Payment dialog state
+  const [paymentDialogOpen, setPaymentDialogOpen] = useState(false);
+  const [paymentSupplier, setPaymentSupplier] = useState<Supplier | null>(null);
+  const [purchaseOrders, setPurchaseOrders] = useState<PurchaseOrder[]>([]);
+  const [paymentAmount, setPaymentAmount] = useState('');
+  const [paymentDate, setPaymentDate] = useState(format(new Date(), 'yyyy-MM-dd'));
+  const [paymentMethod, setPaymentMethod] = useState('bank_transfer');
+  const [bankName, setBankName] = useState('');
+  const [referenceNumber, setReferenceNumber] = useState('');
+  const [paymentNotes, setPaymentNotes] = useState('');
+  const [selectedPO, setSelectedPO] = useState('');
+  const [paymentLoading, setPaymentLoading] = useState(false);
+
+  // Receipt dialog state
+  const [receiptDialogOpen, setReceiptDialogOpen] = useState(false);
+  const [receiptData, setReceiptData] = useState<{
+    receiptNumber: string;
+    supplier: Supplier;
+    amount: number;
+    paymentDate: string;
+    paymentMethod: string;
+    bankName: string | null;
+    referenceNumber: string | null;
+    notes: string | null;
+    purchaseOrder: string | null;
+  } | null>(null);
+  const receiptRef = useRef<HTMLDivElement>(null);
+
+  // Payment history dialog state
+  const [historyDialogOpen, setHistoryDialogOpen] = useState(false);
+  const [historySupplier, setHistorySupplier] = useState<Supplier | null>(null);
+  const [paymentHistory, setPaymentHistory] = useState<SupplierPayment[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+
   useEffect(() => {
     fetchSuppliers();
   }, []);
@@ -54,6 +112,28 @@ const Suppliers = () => {
       .order('name');
 
     if (!error) setSuppliers(data || []);
+  };
+
+  const fetchPurchaseOrders = async (supplierId: string) => {
+    const { data, error } = await supabase
+      .from('purchase_orders')
+      .select('id, order_number, total_amount, status')
+      .eq('supplier_id', supplierId)
+      .order('created_at', { ascending: false });
+
+    if (!error) setPurchaseOrders(data || []);
+  };
+
+  const fetchPaymentHistory = async (supplierId: string) => {
+    setHistoryLoading(true);
+    const { data, error } = await supabase
+      .from('supplier_payments')
+      .select('*, purchase_orders(order_number)')
+      .eq('supplier_id', supplierId)
+      .order('payment_date', { ascending: false });
+
+    if (!error) setPaymentHistory(data || []);
+    setHistoryLoading(false);
   };
 
   const openEditDialog = (supplier: Supplier) => {
@@ -77,6 +157,36 @@ const Suppliers = () => {
     setAddress('');
     setNotes('');
     setIsActive(true);
+  };
+
+  const resetPaymentForm = () => {
+    setPaymentAmount('');
+    setPaymentDate(format(new Date(), 'yyyy-MM-dd'));
+    setPaymentMethod('bank_transfer');
+    setBankName('');
+    setReferenceNumber('');
+    setPaymentNotes('');
+    setSelectedPO('');
+  };
+
+  const openPaymentDialog = (supplier: Supplier) => {
+    setPaymentSupplier(supplier);
+    fetchPurchaseOrders(supplier.id);
+    resetPaymentForm();
+    setPaymentDialogOpen(true);
+  };
+
+  const openHistoryDialog = (supplier: Supplier) => {
+    setHistorySupplier(supplier);
+    fetchPaymentHistory(supplier.id);
+    setHistoryDialogOpen(true);
+  };
+
+  const generateReceiptNumber = () => {
+    const date = new Date();
+    const dateStr = format(date, 'yyyyMMdd');
+    const random = Math.floor(Math.random() * 10000).toString().padStart(4, '0');
+    return `SPR-${dateStr}-${random}`;
   };
 
   const saveSupplier = async () => {
@@ -126,6 +236,99 @@ const Suppliers = () => {
     }
   };
 
+  const savePayment = async () => {
+    if (!paymentSupplier || !paymentAmount || parseFloat(paymentAmount) <= 0) {
+      toast({ title: 'Error', description: 'Valid payment amount is required', variant: 'destructive' });
+      return;
+    }
+
+    if (paymentMethod === 'bank_transfer' && !bankName) {
+      toast({ title: 'Error', description: 'Bank name is required for bank transfers', variant: 'destructive' });
+      return;
+    }
+
+    setPaymentLoading(true);
+
+    try {
+      const receiptNumber = generateReceiptNumber();
+      const paymentData = {
+        supplier_id: paymentSupplier.id,
+        purchase_order_id: selectedPO || null,
+        amount: parseFloat(paymentAmount),
+        payment_date: paymentDate,
+        payment_method: paymentMethod,
+        bank_name: bankName || null,
+        reference_number: referenceNumber ? `${receiptNumber} - ${referenceNumber}` : receiptNumber,
+        notes: paymentNotes || null,
+        paid_by: user?.id || null
+      };
+
+      const { error } = await supabase
+        .from('supplier_payments')
+        .insert(paymentData);
+
+      if (error) throw error;
+
+      // Get the PO order number if selected
+      const poNumber = selectedPO ? purchaseOrders.find(po => po.id === selectedPO)?.order_number : null;
+
+      // Set receipt data and show receipt dialog
+      setReceiptData({
+        receiptNumber,
+        supplier: paymentSupplier,
+        amount: parseFloat(paymentAmount),
+        paymentDate,
+        paymentMethod,
+        bankName: bankName || null,
+        referenceNumber: referenceNumber || null,
+        notes: paymentNotes || null,
+        purchaseOrder: poNumber || null
+      });
+
+      setPaymentDialogOpen(false);
+      setReceiptDialogOpen(true);
+
+      toast({ title: 'Success', description: 'Payment recorded successfully' });
+
+    } catch (error: any) {
+      toast({ title: 'Error', description: error.message, variant: 'destructive' });
+    } finally {
+      setPaymentLoading(false);
+    }
+  };
+
+  const printReceipt = () => {
+    if (receiptRef.current) {
+      const printContent = receiptRef.current.innerHTML;
+      const printWindow = window.open('', '_blank');
+      if (printWindow) {
+        printWindow.document.write(`
+          <html>
+            <head>
+              <title>Supplier Payment Receipt</title>
+              <style>
+                body { font-family: 'Courier New', monospace; padding: 20px; max-width: 400px; margin: 0 auto; }
+                .receipt { border: 2px dashed #333; padding: 20px; }
+                .header { text-align: center; margin-bottom: 20px; }
+                .header h1 { font-size: 18px; margin: 0; }
+                .header p { margin: 5px 0; font-size: 12px; }
+                .divider { border-top: 1px dashed #333; margin: 15px 0; }
+                .row { display: flex; justify-content: space-between; margin: 8px 0; font-size: 14px; }
+                .label { font-weight: bold; }
+                .total { font-size: 18px; font-weight: bold; }
+                .footer { text-align: center; margin-top: 20px; font-size: 12px; }
+                @media print { body { padding: 0; } }
+              </style>
+            </head>
+            <body>${printContent}</body>
+          </html>
+        `);
+        printWindow.document.close();
+        printWindow.print();
+      }
+    }
+  };
+
   const deleteSupplier = async (id: string) => {
     if (!confirm('Are you sure you want to delete this supplier?')) return;
 
@@ -147,12 +350,22 @@ const Suppliers = () => {
     (s.contact_person?.toLowerCase() || '').includes(searchTerm.toLowerCase())
   );
 
+  const getPaymentMethodLabel = (method: string) => {
+    const labels: Record<string, string> = {
+      bank_transfer: 'Bank Transfer',
+      cash: 'Cash',
+      mobile_money: 'Mobile Money',
+      cheque: 'Cheque'
+    };
+    return labels[method] || method;
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold text-foreground">Suppliers</h1>
-          <p className="text-muted-foreground">Manage your suppliers</p>
+          <p className="text-muted-foreground">Manage your suppliers and payments</p>
         </div>
         <Dialog open={dialogOpen} onOpenChange={(open) => {
           setDialogOpen(open);
@@ -281,7 +494,24 @@ const Suppliers = () => {
                       {supplier.is_active ? 'Active' : 'Inactive'}
                     </Badge>
                   </TableCell>
-                  <TableCell className="text-right space-x-2">
+                  <TableCell className="text-right space-x-1">
+                    <Button 
+                      size="sm" 
+                      variant="outline"
+                      onClick={() => openPaymentDialog(supplier)}
+                      title="Make Payment"
+                    >
+                      <CreditCard className="h-4 w-4 mr-1" />
+                      Pay
+                    </Button>
+                    <Button 
+                      size="icon" 
+                      variant="ghost"
+                      onClick={() => openHistoryDialog(supplier)}
+                      title="Payment History"
+                    >
+                      <History className="h-4 w-4" />
+                    </Button>
                     <Button size="icon" variant="ghost" onClick={() => openEditDialog(supplier)}>
                       <Edit className="h-4 w-4" />
                     </Button>
@@ -309,6 +539,251 @@ const Suppliers = () => {
           </Table>
         </CardContent>
       </Card>
+
+      {/* Payment Dialog */}
+      <Dialog open={paymentDialogOpen} onOpenChange={setPaymentDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <CreditCard className="h-5 w-5" />
+              Pay Supplier: {paymentSupplier?.name}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label>Amount (UGX) *</Label>
+              <Input
+                type="number"
+                value={paymentAmount}
+                onChange={(e) => setPaymentAmount(e.target.value)}
+                placeholder="Enter payment amount"
+                min="0"
+                step="1000"
+              />
+            </div>
+
+            <div>
+              <Label>Payment Date *</Label>
+              <Input
+                type="date"
+                value={paymentDate}
+                onChange={(e) => setPaymentDate(e.target.value)}
+              />
+            </div>
+
+            <div>
+              <Label>Payment Method *</Label>
+              <Select value={paymentMethod} onValueChange={setPaymentMethod}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="bank_transfer">Bank Transfer</SelectItem>
+                  <SelectItem value="cash">Cash</SelectItem>
+                  <SelectItem value="mobile_money">Mobile Money</SelectItem>
+                  <SelectItem value="cheque">Cheque</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {paymentMethod === 'bank_transfer' && (
+              <div>
+                <Label>Bank Name *</Label>
+                <Input
+                  value={bankName}
+                  onChange={(e) => setBankName(e.target.value)}
+                  placeholder="Enter bank name"
+                />
+              </div>
+            )}
+
+            <div>
+              <Label>Reference Number</Label>
+              <Input
+                value={referenceNumber}
+                onChange={(e) => setReferenceNumber(e.target.value)}
+                placeholder="Transaction reference"
+              />
+            </div>
+
+            <div>
+              <Label>Purchase Order (Optional)</Label>
+              <Select value={selectedPO || "none"} onValueChange={(val) => setSelectedPO(val === "none" ? "" : val)}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Link to purchase order" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">None</SelectItem>
+                  {purchaseOrders.map((po) => (
+                    <SelectItem key={po.id} value={po.id}>
+                      {po.order_number} - {formatCurrency(po.total_amount)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div>
+              <Label>Notes</Label>
+              <Textarea
+                value={paymentNotes}
+                onChange={(e) => setPaymentNotes(e.target.value)}
+                placeholder="Payment notes"
+                rows={2}
+              />
+            </div>
+
+            <Button onClick={savePayment} disabled={paymentLoading} className="w-full">
+              <Receipt className="h-4 w-4 mr-2" />
+              {paymentLoading ? 'Processing...' : 'Record Payment & Generate Receipt'}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Receipt Dialog */}
+      <Dialog open={receiptDialogOpen} onOpenChange={setReceiptDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Receipt className="h-5 w-5" />
+              Payment Receipt
+            </DialogTitle>
+          </DialogHeader>
+          
+          {receiptData && (
+            <>
+              <div ref={receiptRef} className="receipt border-2 border-dashed border-border p-4 rounded-lg bg-card">
+                <div className="header text-center mb-4">
+                  <h1 className="text-lg font-bold">FADY TECHNOLOGIES</h1>
+                  <p className="text-sm text-muted-foreground">Supplier Payment Receipt</p>
+                </div>
+                
+                <div className="border-t border-dashed border-border my-3" />
+                
+                <div className="space-y-2 text-sm">
+                  <div className="flex justify-between">
+                    <span className="font-medium">Receipt No:</span>
+                    <span>{receiptData.receiptNumber}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="font-medium">Date:</span>
+                    <span>{format(new Date(receiptData.paymentDate), 'dd MMM yyyy')}</span>
+                  </div>
+                </div>
+                
+                <div className="border-t border-dashed border-border my-3" />
+                
+                <div className="space-y-2 text-sm">
+                  <div className="flex justify-between">
+                    <span className="font-medium">Supplier:</span>
+                    <span className="text-right">{receiptData.supplier.name}</span>
+                  </div>
+                  {receiptData.purchaseOrder && (
+                    <div className="flex justify-between">
+                      <span className="font-medium">PO Number:</span>
+                      <span>{receiptData.purchaseOrder}</span>
+                    </div>
+                  )}
+                  <div className="flex justify-between">
+                    <span className="font-medium">Payment Method:</span>
+                    <span>{getPaymentMethodLabel(receiptData.paymentMethod)}</span>
+                  </div>
+                  {receiptData.bankName && (
+                    <div className="flex justify-between">
+                      <span className="font-medium">Bank:</span>
+                      <span>{receiptData.bankName}</span>
+                    </div>
+                  )}
+                  {receiptData.referenceNumber && (
+                    <div className="flex justify-between">
+                      <span className="font-medium">Reference:</span>
+                      <span>{receiptData.referenceNumber}</span>
+                    </div>
+                  )}
+                </div>
+                
+                <div className="border-t border-dashed border-border my-3" />
+                
+                <div className="flex justify-between items-center text-lg font-bold">
+                  <span>AMOUNT PAID:</span>
+                  <span>{formatCurrency(receiptData.amount)}</span>
+                </div>
+                
+                {receiptData.notes && (
+                  <>
+                    <div className="border-t border-dashed border-border my-3" />
+                    <div className="text-sm">
+                      <span className="font-medium">Notes:</span>
+                      <p className="text-muted-foreground mt-1">{receiptData.notes}</p>
+                    </div>
+                  </>
+                )}
+                
+                <div className="border-t border-dashed border-border my-3" />
+                
+                <div className="footer text-center text-xs text-muted-foreground">
+                  <p>Thank you for your business</p>
+                  <p className="mt-1">{format(new Date(), 'dd/MM/yyyy HH:mm')}</p>
+                </div>
+              </div>
+              
+              <div className="flex gap-2">
+                <Button onClick={printReceipt} className="flex-1">
+                  <Printer className="h-4 w-4 mr-2" />
+                  Print Receipt
+                </Button>
+                <Button variant="outline" onClick={() => setReceiptDialogOpen(false)} className="flex-1">
+                  Close
+                </Button>
+              </div>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Payment History Dialog */}
+      <Dialog open={historyDialogOpen} onOpenChange={setHistoryDialogOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <History className="h-5 w-5" />
+              Payment History: {historySupplier?.name}
+            </DialogTitle>
+          </DialogHeader>
+          
+          {historyLoading ? (
+            <div className="text-center py-8 text-muted-foreground">Loading...</div>
+          ) : paymentHistory.length === 0 ? (
+            <div className="text-center py-8 text-muted-foreground">No payment history found</div>
+          ) : (
+            <div className="max-h-96 overflow-y-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Date</TableHead>
+                    <TableHead>Amount</TableHead>
+                    <TableHead>Method</TableHead>
+                    <TableHead>Reference</TableHead>
+                    <TableHead>PO</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {paymentHistory.map(payment => (
+                    <TableRow key={payment.id}>
+                      <TableCell>{format(new Date(payment.payment_date), 'dd MMM yyyy')}</TableCell>
+                      <TableCell className="font-medium">{formatCurrency(payment.amount)}</TableCell>
+                      <TableCell>{getPaymentMethodLabel(payment.payment_method)}</TableCell>
+                      <TableCell className="text-xs">{payment.reference_number || '-'}</TableCell>
+                      <TableCell>{payment.purchase_orders?.order_number || '-'}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
