@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -15,7 +15,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { 
   ClipboardList, RefreshCw, AlertTriangle, Search, Package, 
   MapPin, Barcode, TrendingDown, TrendingUp, Filter, Download,
-  Box, Warehouse, History, Settings
+  Box, Warehouse, History, Settings, Plus, Minus, Check, Zap
 } from 'lucide-react';
 import { Textarea } from '@/components/ui/textarea';
 import { formatCurrency } from '@/lib/currency';
@@ -77,6 +77,14 @@ const Inventory = () => {
   const [loading, setLoading] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
   
+  // Quick entry state
+  const [quickSearchTerm, setQuickSearchTerm] = useState('');
+  const [quickQuantity, setQuickQuantity] = useState(1);
+  const [quickMode, setQuickMode] = useState<'add' | 'remove'>('add');
+  const [quickLoading, setQuickLoading] = useState(false);
+  const [showQuickSuccess, setShowQuickSuccess] = useState<string | null>(null);
+  const quickSearchRef = useRef<HTMLInputElement>(null);
+  
   // Filters
   const [searchTerm, setSearchTerm] = useState('');
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
@@ -119,6 +127,73 @@ const Inventory = () => {
     setSerialNumbers('');
     setCondition('New');
     setAdjustmentType('adjustment');
+  };
+
+  // Quick stock entry for products
+  const quickFilteredProducts = products.filter(p => 
+    p.name.toLowerCase().includes(quickSearchTerm.toLowerCase()) ||
+    (p.barcode?.toLowerCase() || '').includes(quickSearchTerm.toLowerCase()) ||
+    (p.sku?.toLowerCase() || '').includes(quickSearchTerm.toLowerCase())
+  ).slice(0, 8);
+
+  const handleQuickStockEntry = async (product: Product) => {
+    if (quickQuantity <= 0) {
+      toast({ title: 'Error', description: 'Quantity must be greater than 0', variant: 'destructive' });
+      return;
+    }
+
+    setQuickLoading(true);
+
+    try {
+      const qty = quickMode === 'add' ? quickQuantity : -quickQuantity;
+      const newStock = product.stock_quantity + qty;
+
+      if (newStock < 0) {
+        throw new Error('Not enough stock to remove');
+      }
+
+      // Update product stock
+      await supabase
+        .from('products')
+        .update({ stock_quantity: newStock })
+        .eq('id', product.id);
+
+      // Create transaction record
+      await supabase
+        .from('inventory_transactions')
+        .insert({
+          product_id: product.id,
+          transaction_type: quickMode === 'add' ? 'adjustment' : 'damage',
+          quantity: qty,
+          previous_stock: product.stock_quantity,
+          new_stock: newStock,
+          notes: `Quick ${quickMode === 'add' ? 'add' : 'remove'}: ${Math.abs(qty)} units`,
+          created_by: user?.id
+        });
+
+      // Show success feedback
+      setShowQuickSuccess(product.id);
+      setTimeout(() => setShowQuickSuccess(null), 1500);
+
+      toast({ 
+        title: 'Done!', 
+        description: `${quickMode === 'add' ? 'Added' : 'Removed'} ${quickQuantity} × ${product.name}` 
+      });
+
+      // Refresh data
+      fetchProducts();
+      fetchTransactions();
+
+      // Reset for next entry
+      setQuickSearchTerm('');
+      setQuickQuantity(1);
+      quickSearchRef.current?.focus();
+
+    } catch (error: any) {
+      toast({ title: 'Error', description: error.message, variant: 'destructive' });
+    } finally {
+      setQuickLoading(false);
+    }
   };
 
   const handleAdjustment = async () => {
@@ -237,11 +312,11 @@ const Inventory = () => {
           </Button>
           <Dialog open={dialogOpen} onOpenChange={(open) => { setDialogOpen(open); if (!open) resetForm(); }}>
             <DialogTrigger asChild>
-              <Button><RefreshCw className="h-4 w-4 mr-2" />Stock Adjustment</Button>
+              <Button variant="outline"><RefreshCw className="h-4 w-4 mr-2" />Advanced</Button>
             </DialogTrigger>
             <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
               <DialogHeader>
-                <DialogTitle>Stock Adjustment</DialogTitle>
+                <DialogTitle>Advanced Stock Adjustment</DialogTitle>
               </DialogHeader>
               <div className="space-y-4">
                 <div>
@@ -317,9 +392,10 @@ const Inventory = () => {
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <Label>Location</Label>
-                    <Select value={location} onValueChange={setLocation}>
+                    <Select value={location || "none"} onValueChange={(val) => setLocation(val === "none" ? "" : val)}>
                       <SelectTrigger><SelectValue placeholder="Select location" /></SelectTrigger>
                       <SelectContent>
+                        <SelectItem value="none">Not specified</SelectItem>
                         {LOCATIONS.map(loc => <SelectItem key={loc} value={loc}>{loc}</SelectItem>)}
                       </SelectContent>
                     </Select>
@@ -364,12 +440,154 @@ const Inventory = () => {
         </div>
       </div>
 
+      {/* QUICK STOCK ENTRY - Big and Easy */}
+      <Card className="border-2 border-primary/20 bg-gradient-to-r from-primary/5 to-primary/10">
+        <CardHeader className="pb-3">
+          <CardTitle className="flex items-center gap-2 text-xl">
+            <Zap className="h-6 w-6 text-primary" />
+            Quick Stock Entry
+          </CardTitle>
+          <CardDescription className="text-base">
+            Fast and easy - just search, set quantity, and tap the product to update stock
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {/* Mode Selection - Big Buttons */}
+          <div className="grid grid-cols-2 gap-3">
+            <Button
+              size="lg"
+              variant={quickMode === 'add' ? 'default' : 'outline'}
+              className={`h-16 text-lg font-bold ${quickMode === 'add' ? 'bg-green-600 hover:bg-green-700' : ''}`}
+              onClick={() => setQuickMode('add')}
+            >
+              <Plus className="h-6 w-6 mr-2" />
+              ADD STOCK
+            </Button>
+            <Button
+              size="lg"
+              variant={quickMode === 'remove' ? 'default' : 'outline'}
+              className={`h-16 text-lg font-bold ${quickMode === 'remove' ? 'bg-red-600 hover:bg-red-700' : ''}`}
+              onClick={() => setQuickMode('remove')}
+            >
+              <Minus className="h-6 w-6 mr-2" />
+              REMOVE STOCK
+            </Button>
+          </div>
+
+          {/* Quantity Selection - Big and Easy */}
+          <div className="flex items-center gap-4">
+            <Label className="text-lg font-medium whitespace-nowrap">Quantity:</Label>
+            <div className="flex items-center gap-2">
+              <Button
+                size="lg"
+                variant="outline"
+                className="h-14 w-14 text-2xl font-bold"
+                onClick={() => setQuickQuantity(Math.max(1, quickQuantity - 1))}
+              >
+                -
+              </Button>
+              <Input
+                type="number"
+                value={quickQuantity}
+                onChange={(e) => setQuickQuantity(Math.max(1, parseInt(e.target.value) || 1))}
+                className="h-14 w-24 text-center text-2xl font-bold"
+                min={1}
+              />
+              <Button
+                size="lg"
+                variant="outline"
+                className="h-14 w-14 text-2xl font-bold"
+                onClick={() => setQuickQuantity(quickQuantity + 1)}
+              >
+                +
+              </Button>
+            </div>
+            {/* Quick quantity buttons */}
+            <div className="flex gap-2">
+              {[5, 10, 20, 50].map(num => (
+                <Button
+                  key={num}
+                  size="sm"
+                  variant="secondary"
+                  onClick={() => setQuickQuantity(num)}
+                  className="font-bold"
+                >
+                  {num}
+                </Button>
+              ))}
+            </div>
+          </div>
+
+          {/* Search Products */}
+          <div className="relative">
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
+            <Input
+              ref={quickSearchRef}
+              placeholder="Type product name, barcode, or SKU to search..."
+              value={quickSearchTerm}
+              onChange={(e) => setQuickSearchTerm(e.target.value)}
+              className="pl-12 h-14 text-lg"
+              autoComplete="off"
+            />
+          </div>
+
+          {/* Product Grid - Big Tap Targets */}
+          {quickSearchTerm && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+              {quickFilteredProducts.map(product => (
+                <Button
+                  key={product.id}
+                  variant="outline"
+                  disabled={quickLoading}
+                  onClick={() => handleQuickStockEntry(product)}
+                  className={`h-auto p-4 flex flex-col items-start text-left relative transition-all ${
+                    showQuickSuccess === product.id 
+                      ? 'bg-green-100 border-green-500 dark:bg-green-900/30' 
+                      : 'hover:border-primary hover:bg-primary/5'
+                  }`}
+                >
+                  {showQuickSuccess === product.id && (
+                    <div className="absolute inset-0 flex items-center justify-center bg-green-500/20 rounded-lg">
+                      <Check className="h-10 w-10 text-green-600" />
+                    </div>
+                  )}
+                  <div className="font-bold text-base truncate w-full">{product.name}</div>
+                  <div className="flex items-center justify-between w-full mt-2">
+                    <Badge variant="secondary" className="text-sm">
+                      Stock: {product.stock_quantity}
+                    </Badge>
+                    <span className={`font-bold ${quickMode === 'add' ? 'text-green-600' : 'text-red-600'}`}>
+                      {quickMode === 'add' ? '+' : '-'}{quickQuantity}
+                    </span>
+                  </div>
+                  {product.barcode && (
+                    <div className="text-xs text-muted-foreground mt-1 font-mono">{product.barcode}</div>
+                  )}
+                </Button>
+              ))}
+              {quickFilteredProducts.length === 0 && (
+                <div className="col-span-full text-center py-8 text-muted-foreground">
+                  No products found matching "{quickSearchTerm}"
+                </div>
+              )}
+            </div>
+          )}
+
+          {!quickSearchTerm && (
+            <div className="text-center py-6 text-muted-foreground bg-muted/50 rounded-lg">
+              <Search className="h-8 w-8 mx-auto mb-2 opacity-50" />
+              <p>Start typing to search for products</p>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
       {/* Stats Cards */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
         <Card>
           <CardContent className="pt-4">
             <div className="flex items-center gap-3">
-              <div className="p-2 bg-blue-100 rounded-lg">
+              <div className="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-lg">
                 <Box className="h-5 w-5 text-blue-600" />
               </div>
               <div>
@@ -382,7 +600,7 @@ const Inventory = () => {
         <Card>
           <CardContent className="pt-4">
             <div className="flex items-center gap-3">
-              <div className="p-2 bg-green-100 rounded-lg">
+              <div className="p-2 bg-green-100 dark:bg-green-900/30 rounded-lg">
                 <Warehouse className="h-5 w-5 text-green-600" />
               </div>
               <div>
@@ -395,7 +613,7 @@ const Inventory = () => {
         <Card className={outOfStockProducts.length > 0 ? 'border-red-500' : ''}>
           <CardContent className="pt-4">
             <div className="flex items-center gap-3">
-              <div className="p-2 bg-red-100 rounded-lg">
+              <div className="p-2 bg-red-100 dark:bg-red-900/30 rounded-lg">
                 <AlertTriangle className="h-5 w-5 text-red-600" />
               </div>
               <div>
@@ -408,7 +626,7 @@ const Inventory = () => {
         <Card className={lowStockProducts.length > 0 ? 'border-orange-500' : ''}>
           <CardContent className="pt-4">
             <div className="flex items-center gap-3">
-              <div className="p-2 bg-orange-100 rounded-lg">
+              <div className="p-2 bg-orange-100 dark:bg-orange-900/30 rounded-lg">
                 <TrendingDown className="h-5 w-5 text-orange-600" />
               </div>
               <div>
@@ -421,7 +639,7 @@ const Inventory = () => {
         <Card>
           <CardContent className="pt-4">
             <div className="flex items-center gap-3">
-              <div className="p-2 bg-yellow-100 rounded-lg">
+              <div className="p-2 bg-yellow-100 dark:bg-yellow-900/30 rounded-lg">
                 <Package className="h-5 w-5 text-yellow-600" />
               </div>
               <div>
