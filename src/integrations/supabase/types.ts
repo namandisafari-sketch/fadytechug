@@ -723,9 +723,8 @@ export type Database = {
           serial_number: string
           sold_date: string | null
           status: string
+          supplier_id: string | null
           updated_at: string
-          warranty_end_date: string | null
-          warranty_start_date: string | null
         }
         Insert: {
           condition?: string | null
@@ -741,9 +740,8 @@ export type Database = {
           serial_number: string
           sold_date?: string | null
           status?: string
+          supplier_id?: string | null
           updated_at?: string
-          warranty_end_date?: string | null
-          warranty_start_date?: string | null
         }
         Update: {
           condition?: string | null
@@ -759,9 +757,8 @@ export type Database = {
           serial_number?: string
           sold_date?: string | null
           status?: string
+          supplier_id?: string | null
           updated_at?: string
-          warranty_end_date?: string | null
-          warranty_start_date?: string | null
         }
         Relationships: [
           {
@@ -783,6 +780,13 @@ export type Database = {
             columns: ["sale_id"]
             isOneToOne: false
             referencedRelation: "sales"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "serial_units_supplier_id_fkey"
+            columns: ["supplier_id"]
+            isOneToOne: false
+            referencedRelation: "suppliers"
             referencedColumns: ["id"]
           },
         ]
