@@ -14,7 +14,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { formatCurrency } from '@/lib/currency';
 import { 
   Hash, Search, Plus, History, Package, MapPin, 
-  Calendar, Edit, Trash2, Truck 
+  Calendar, Edit, Trash2, Truck, ArrowRightLeft 
 } from 'lucide-react';
 import { format } from 'date-fns';
 
@@ -75,8 +75,10 @@ const SerialNumberTracker = () => {
   const [loading, setLoading] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [historyDialogOpen, setHistoryDialogOpen] = useState(false);
+  const [transferDialogOpen, setTransferDialogOpen] = useState(false);
   const [selectedUnit, setSelectedUnit] = useState<SerialUnit | null>(null);
   const [history, setHistory] = useState<SerialUnitHistory[]>([]);
+  const [transferLocation, setTransferLocation] = useState('');
   
   // Form state
   const [formData, setFormData] = useState({
@@ -265,6 +267,57 @@ const SerialNumberTracker = () => {
     setSelectedUnit(unit);
     await fetchHistory(unit.id);
     setHistoryDialogOpen(true);
+  };
+
+  const handleOpenTransfer = (unit: SerialUnit) => {
+    setSelectedUnit(unit);
+    setTransferLocation(unit.location || '');
+    setTransferDialogOpen(true);
+  };
+
+  const handleQuickTransfer = async () => {
+    if (!selectedUnit || !transferLocation) {
+      toast({ title: 'Error', description: 'Please select a location', variant: 'destructive' });
+      return;
+    }
+
+    if (transferLocation === selectedUnit.location) {
+      toast({ title: 'Info', description: 'Unit is already at this location' });
+      setTransferDialogOpen(false);
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const { error } = await supabase
+        .from('serial_units')
+        .update({ location: transferLocation })
+        .eq('id', selectedUnit.id);
+
+      if (error) throw error;
+
+      // Log the transfer in history
+      await supabase.from('serial_unit_history').insert({
+        serial_unit_id: selectedUnit.id,
+        action: 'transferred',
+        previous_location: selectedUnit.location,
+        new_location: transferLocation,
+        previous_status: selectedUnit.status,
+        new_status: selectedUnit.status,
+        notes: `Transferred from ${selectedUnit.location || 'unassigned'} to ${transferLocation}`,
+        performed_by: user?.id
+      });
+
+      toast({ title: 'Success', description: `Unit transferred to ${transferLocation}` });
+      setTransferDialogOpen(false);
+      setTransferLocation('');
+      setSelectedUnit(null);
+      fetchSerialUnits();
+    } catch (error: any) {
+      toast({ title: 'Error', description: error.message, variant: 'destructive' });
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleDelete = async (id: string) => {
@@ -571,6 +624,9 @@ const SerialNumberTracker = () => {
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex justify-end gap-1">
+                          <Button variant="ghost" size="icon" onClick={() => handleOpenTransfer(unit)} title="Quick Transfer">
+                            <ArrowRightLeft className="h-4 w-4 text-primary" />
+                          </Button>
                           <Button variant="ghost" size="icon" onClick={() => handleViewHistory(unit)}>
                             <History className="h-4 w-4" />
                           </Button>
@@ -590,6 +646,50 @@ const SerialNumberTracker = () => {
           </div>
         </CardContent>
       </Card>
+
+      {/* Quick Transfer Dialog */}
+      <Dialog open={transferDialogOpen} onOpenChange={(open) => { setTransferDialogOpen(open); if (!open) { setTransferLocation(''); setSelectedUnit(null); } }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <ArrowRightLeft className="h-5 w-5" />
+              Quick Transfer
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="p-3 bg-muted rounded-lg">
+              <p className="text-sm font-medium">{selectedUnit?.products?.name}</p>
+              <p className="text-xs text-muted-foreground font-mono">{selectedUnit?.serial_number}</p>
+              {selectedUnit?.location && (
+                <p className="text-xs text-muted-foreground mt-1">
+                  Current: <span className="font-medium">{selectedUnit.location}</span>
+                </p>
+              )}
+            </div>
+            
+            <div>
+              <Label>Transfer To</Label>
+              <Select value={transferLocation} onValueChange={setTransferLocation}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select destination" />
+                </SelectTrigger>
+                <SelectContent>
+                  {LOCATION_OPTIONS.map(loc => (
+                    <SelectItem key={loc} value={loc} disabled={loc === selectedUnit?.location}>
+                      {loc} {loc === selectedUnit?.location && '(current)'}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <Button onClick={handleQuickTransfer} disabled={loading || !transferLocation} className="w-full">
+              <ArrowRightLeft className="h-4 w-4 mr-2" />
+              {loading ? 'Transferring...' : 'Transfer Unit'}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* History Dialog */}
       <Dialog open={historyDialogOpen} onOpenChange={setHistoryDialogOpen}>
