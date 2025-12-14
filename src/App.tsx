@@ -28,6 +28,7 @@ import PurchaseOrders from "./pages/admin/PurchaseOrders";
 import Reports from "./pages/admin/Reports";
 import SerialNumbers from "./pages/admin/SerialNumbers";
 import StaffManagement from "./pages/admin/StaffManagement";
+import SiteAppearance from "./pages/admin/SiteAppearance";
 
 const queryClient = new QueryClient();
 
@@ -66,6 +67,7 @@ function AppContent() {
             <Route path="customers" element={<Customers />} />
             <Route path="inquiries" element={<Inquiries />} />
             <Route path="settings" element={<Settings />} />
+            <Route path="site-appearance" element={<SiteAppearance />} />
             <Route path="staff" element={<StaffManagement />} />
           </Route>
           
