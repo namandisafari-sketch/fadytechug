@@ -308,7 +308,21 @@ const SerialNumberTracker = () => {
         performed_by: user?.id
       });
 
-      toast({ title: 'Success', description: `Unit transferred to ${transferLocation}` });
+      // Auto-show product when transferred to Store Front
+      if (transferLocation === 'Store Front') {
+        await supabase
+          .from('products')
+          .update({ is_active: true })
+          .eq('id', selectedUnit.product_id);
+        
+        toast({ 
+          title: 'Success', 
+          description: `Unit transferred to ${transferLocation}. Product is now visible to customers.` 
+        });
+      } else {
+        toast({ title: 'Success', description: `Unit transferred to ${transferLocation}` });
+      }
+      
       setTransferDialogOpen(false);
       setTransferLocation('');
       setSelectedUnit(null);

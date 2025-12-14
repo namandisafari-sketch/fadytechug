@@ -26,7 +26,8 @@ import {
   Sun,
   UsersRound,
   Lock,
-  CreditCard
+  CreditCard,
+  PaintBucket
 } from 'lucide-react';
 import { useState } from 'react';
 import { cn } from '@/lib/utils';
@@ -53,6 +54,7 @@ const navItems = [
 // Admin-only pages
 const adminOnlyItems = [
   { path: '/admin/staff', icon: UsersRound, label: 'Staff Management' },
+  { path: '/admin/site-appearance', icon: PaintBucket, label: 'Site Appearance' },
 ];
 
 const AdminLayout = () => {
