@@ -14,7 +14,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { formatCurrency } from '@/lib/currency';
 import { 
   Hash, Search, Plus, History, Package, MapPin, 
-  Calendar, Shield, Edit, Trash2, Eye 
+  Calendar, Edit, Trash2, Truck 
 } from 'lucide-react';
 import { format } from 'date-fns';
 
@@ -27,14 +27,14 @@ interface SerialUnit {
   location: string | null;
   purchase_date: string | null;
   purchase_cost: number | null;
-  warranty_start_date: string | null;
-  warranty_end_date: string | null;
+  supplier_id: string | null;
   sold_date: string | null;
   sale_id: string | null;
   customer_id: string | null;
   notes: string | null;
   created_at: string;
   products?: { name: string; sku: string | null };
+  suppliers?: { name: string };
 }
 
 interface SerialUnitHistory {
@@ -55,6 +55,11 @@ interface Product {
   sku: string | null;
 }
 
+interface Supplier {
+  id: string;
+  name: string;
+}
+
 const STATUS_OPTIONS = ['in_stock', 'sold', 'reserved', 'in_repair', 'returned', 'damaged', 'lost'];
 const CONDITION_OPTIONS = ['new', 'refurbished', 'open_box', 'used_like_new', 'used_good', 'damaged'];
 const LOCATION_OPTIONS = ['Warehouse A', 'Warehouse B', 'Store Front', 'Service Center', 'Returns'];
@@ -64,6 +69,7 @@ const SerialNumberTracker = () => {
   const { toast } = useToast();
   const [serialUnits, setSerialUnits] = useState<SerialUnit[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
+  const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [loading, setLoading] = useState(false);
@@ -81,20 +87,21 @@ const SerialNumberTracker = () => {
     location: '',
     purchase_date: '',
     purchase_cost: '',
-    warranty_start_date: '',
-    warranty_end_date: '',
+    supplier_id: '',
     notes: ''
   });
 
   useEffect(() => {
     fetchSerialUnits();
     fetchProducts();
+    fetchSuppliers();
+    cleanupOldSoldUnits();
   }, []);
 
   const fetchSerialUnits = async () => {
     const { data, error } = await supabase
       .from('serial_units')
-      .select('*, products(name, sku)')
+      .select('*, products(name, sku), suppliers(name)')
       .order('created_at', { ascending: false });
 
     if (!error) setSerialUnits(data || []);
@@ -107,6 +114,33 @@ const SerialNumberTracker = () => {
       .order('name');
 
     if (!error) setProducts(data || []);
+  };
+
+  const fetchSuppliers = async () => {
+    const { data, error } = await supabase
+      .from('suppliers')
+      .select('id, name')
+      .eq('is_active', true)
+      .order('name');
+
+    if (!error) setSuppliers(data || []);
+  };
+
+  // Auto-delete sold units older than 4 days
+  const cleanupOldSoldUnits = async () => {
+    const fourDaysAgo = new Date();
+    fourDaysAgo.setDate(fourDaysAgo.getDate() - 4);
+    const cutoffDate = fourDaysAgo.toISOString().split('T')[0];
+
+    const { error } = await supabase
+      .from('serial_units')
+      .delete()
+      .eq('status', 'sold')
+      .lt('sold_date', cutoffDate);
+
+    if (error) {
+      console.error('Error cleaning up old sold units:', error);
+    }
   };
 
   const fetchHistory = async (unitId: string) => {
@@ -128,8 +162,7 @@ const SerialNumberTracker = () => {
       location: '',
       purchase_date: '',
       purchase_cost: '',
-      warranty_start_date: '',
-      warranty_end_date: '',
+      supplier_id: '',
       notes: ''
     });
     setSelectedUnit(null);
@@ -151,8 +184,7 @@ const SerialNumberTracker = () => {
         location: formData.location || null,
         purchase_date: formData.purchase_date || null,
         purchase_cost: formData.purchase_cost ? parseFloat(formData.purchase_cost) : null,
-        warranty_start_date: formData.warranty_start_date || null,
-        warranty_end_date: formData.warranty_end_date || null,
+        supplier_id: formData.supplier_id || null,
         notes: formData.notes || null
       };
 
@@ -223,8 +255,7 @@ const SerialNumberTracker = () => {
       location: unit.location || '',
       purchase_date: unit.purchase_date || '',
       purchase_cost: unit.purchase_cost?.toString() || '',
-      warranty_start_date: unit.warranty_start_date || '',
-      warranty_end_date: unit.warranty_end_date || '',
+      supplier_id: unit.supplier_id || '',
       notes: unit.notes || ''
     });
     setDialogOpen(true);
@@ -261,16 +292,6 @@ const SerialNumberTracker = () => {
     return <Badge className={variants[status] || variants.in_stock}>{status.replace('_', ' ')}</Badge>;
   };
 
-  const getWarrantyStatus = (endDate: string | null) => {
-    if (!endDate) return null;
-    const end = new Date(endDate);
-    const now = new Date();
-    const daysLeft = Math.ceil((end.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-    
-    if (daysLeft < 0) return <Badge variant="destructive">Expired</Badge>;
-    if (daysLeft < 30) return <Badge className="bg-orange-100 text-orange-800">{daysLeft}d left</Badge>;
-    return <Badge className="bg-green-100 text-green-800">{Math.floor(daysLeft / 30)}mo left</Badge>;
-  };
 
   const filteredUnits = serialUnits.filter(unit => {
     const matchesSearch = 
@@ -287,11 +308,7 @@ const SerialNumberTracker = () => {
     inStock: serialUnits.filter(u => u.status === 'in_stock').length,
     sold: serialUnits.filter(u => u.status === 'sold').length,
     inRepair: serialUnits.filter(u => u.status === 'in_repair').length,
-    warrantyExpiring: serialUnits.filter(u => {
-      if (!u.warranty_end_date) return false;
-      const daysLeft = Math.ceil((new Date(u.warranty_end_date).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
-      return daysLeft > 0 && daysLeft < 30;
-    }).length
+    totalValue: serialUnits.reduce((sum, u) => sum + (u.purchase_cost || 0), 0)
   };
 
   return (
@@ -350,15 +367,15 @@ const SerialNumberTracker = () => {
             </div>
           </CardContent>
         </Card>
-        <Card className={stats.warrantyExpiring > 0 ? 'border-yellow-500' : ''}>
+        <Card>
           <CardContent className="pt-4">
             <div className="flex items-center gap-3">
               <div className="p-2 bg-yellow-100 dark:bg-yellow-900 rounded-lg">
-                <Shield className="h-5 w-5 text-yellow-600 dark:text-yellow-400" />
+                <Package className="h-5 w-5 text-yellow-600 dark:text-yellow-400" />
               </div>
               <div>
-                <p className="text-xs text-muted-foreground">Warranty Expiring</p>
-                <p className="text-xl font-bold text-yellow-600">{stats.warrantyExpiring}</p>
+                <p className="text-xs text-muted-foreground">Total Value</p>
+                <p className="text-xl font-bold text-yellow-600">{formatCurrency(stats.totalValue)}</p>
               </div>
             </div>
           </CardContent>
@@ -477,23 +494,16 @@ const SerialNumberTracker = () => {
                       </div>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <Label>Warranty Start</Label>
-                        <Input
-                          type="date"
-                          value={formData.warranty_start_date}
-                          onChange={(e) => setFormData({...formData, warranty_start_date: e.target.value})}
-                        />
-                      </div>
-                      <div>
-                        <Label>Warranty End</Label>
-                        <Input
-                          type="date"
-                          value={formData.warranty_end_date}
-                          onChange={(e) => setFormData({...formData, warranty_end_date: e.target.value})}
-                        />
-                      </div>
+                    <div>
+                      <Label>Supplier</Label>
+                      <Select value={formData.supplier_id} onValueChange={(v) => setFormData({...formData, supplier_id: v})}>
+                        <SelectTrigger><SelectValue placeholder="Select supplier" /></SelectTrigger>
+                        <SelectContent>
+                          {suppliers.map(s => (
+                            <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                     </div>
 
                     <div>
@@ -523,7 +533,8 @@ const SerialNumberTracker = () => {
                   <TableHead>Product</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Location</TableHead>
-                  <TableHead>Warranty</TableHead>
+                  <TableHead>Supplier</TableHead>
+                  <TableHead>Cost</TableHead>
                   <TableHead>Registered</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
@@ -531,7 +542,7 @@ const SerialNumberTracker = () => {
               <TableBody>
                 {filteredUnits.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                    <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
                       No serial units found
                     </TableCell>
                   </TableRow>
@@ -553,7 +564,8 @@ const SerialNumberTracker = () => {
                           </span>
                         ) : '-'}
                       </TableCell>
-                      <TableCell>{getWarrantyStatus(unit.warranty_end_date)}</TableCell>
+                      <TableCell>{unit.suppliers?.name || '-'}</TableCell>
+                      <TableCell>{unit.purchase_cost ? formatCurrency(unit.purchase_cost) : '-'}</TableCell>
                       <TableCell className="text-sm text-muted-foreground">
                         {format(new Date(unit.created_at), 'MMM d, yyyy')}
                       </TableCell>
