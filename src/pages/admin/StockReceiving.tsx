@@ -68,7 +68,7 @@ const StockReceiving = () => {
         suppliers(name),
         purchase_order_items(id, product_id, quantity, received_quantity, unit_cost, products(name, barcode))
       `)
-      .in('status', ['pending', 'ordered', 'partially_received'])
+      .in('status', ['awaiting_delivery', 'partially_received'])
       .order('created_at', { ascending: false });
 
     if (!error && data) {
