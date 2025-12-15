@@ -11,7 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
-import { Plus, ShoppingBag, Search, Eye, Check, Trash2, Package } from 'lucide-react';
+import { Plus, ShoppingBag, Search, Eye, Check, Trash2, Package, Barcode } from 'lucide-react';
 import { formatCurrency } from '@/lib/currency';
 
 interface Supplier {
@@ -24,6 +24,8 @@ interface Product {
   name: string;
   price: number;
   stock_quantity: number;
+  barcode: string | null;
+  unit_cost: number | null;
 }
 
 interface PurchaseOrderItem {
@@ -80,6 +82,8 @@ const PurchaseOrders = () => {
   const [selectedProduct, setSelectedProduct] = useState('');
   const [itemQuantity, setItemQuantity] = useState('');
   const [itemCost, setItemCost] = useState('');
+  const [productSearch, setProductSearch] = useState('');
+  const [barcodeSearch, setBarcodeSearch] = useState('');
 
   useEffect(() => {
     fetchOrders();
@@ -102,9 +106,40 @@ const PurchaseOrders = () => {
   };
 
   const fetchProducts = async () => {
-    const { data } = await supabase.from('products').select('id, name, price, stock_quantity').eq('is_active', true).order('name');
+    const { data } = await supabase.from('products').select('id, name, price, stock_quantity, barcode, unit_cost').eq('is_active', true).order('name');
     if (data) setProducts(data);
   };
+
+  const searchByBarcode = () => {
+    if (!barcodeSearch.trim()) {
+      toast({ title: 'Error', description: 'Please enter a barcode', variant: 'destructive' });
+      return;
+    }
+    
+    const product = products.find(p => p.barcode === barcodeSearch.trim());
+    if (product) {
+      setSelectedProduct(product.id);
+      setItemCost((product.unit_cost || 0).toString());
+      setItemQuantity('1');
+      setBarcodeSearch('');
+      toast({ title: 'Product Found', description: product.name });
+    } else {
+      toast({ title: 'Not Found', description: 'No product matches this barcode', variant: 'destructive' });
+    }
+  };
+
+  const handleProductSelect = (productId: string) => {
+    setSelectedProduct(productId);
+    const product = products.find(p => p.id === productId);
+    if (product && product.unit_cost) {
+      setItemCost(product.unit_cost.toString());
+    }
+  };
+
+  const filteredProducts = products.filter(p => 
+    p.name.toLowerCase().includes(productSearch.toLowerCase()) ||
+    (p.barcode && p.barcode.includes(productSearch))
+  );
 
   const resetForm = () => {
     setSupplierId('');
@@ -113,6 +148,8 @@ const PurchaseOrders = () => {
     setSelectedProduct('');
     setItemQuantity('');
     setItemCost('');
+    setProductSearch('');
+    setBarcodeSearch('');
   };
 
   const addItem = () => {
@@ -334,21 +371,64 @@ const PurchaseOrders = () => {
               {/* Add Items */}
               <Card>
                 <CardHeader className="pb-3">
-                  <CardTitle className="text-base">Add Items</CardTitle>
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <Package className="h-4 w-4" />
+                    Add Items
+                  </CardTitle>
                 </CardHeader>
-                <CardContent className="space-y-3">
-                  <div className="grid grid-cols-3 gap-2">
-                    <Select value={selectedProduct} onValueChange={setSelectedProduct}>
-                      <SelectTrigger><SelectValue placeholder="Product" /></SelectTrigger>
+                <CardContent className="space-y-4">
+                  {/* Barcode Search */}
+                  <div className="flex gap-2">
+                    <div className="flex-1 relative">
+                      <Barcode className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                      <Input
+                        value={barcodeSearch}
+                        onChange={(e) => setBarcodeSearch(e.target.value)}
+                        placeholder="Scan or type barcode..."
+                        className="pl-10"
+                        onKeyDown={(e) => e.key === 'Enter' && searchByBarcode()}
+                      />
+                    </div>
+                    <Button type="button" variant="outline" onClick={searchByBarcode}>
+                      Find
+                    </Button>
+                  </div>
+
+                  {/* Product Selection */}
+                  <div className="space-y-2">
+                    <Label className="text-sm">Or search by name:</Label>
+                    <Input
+                      value={productSearch}
+                      onChange={(e) => setProductSearch(e.target.value)}
+                      placeholder="Search products..."
+                      className="mb-2"
+                    />
+                    <Select value={selectedProduct} onValueChange={handleProductSelect}>
+                      <SelectTrigger><SelectValue placeholder="Select product" /></SelectTrigger>
                       <SelectContent>
-                        {products.map(p => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}
+                        {filteredProducts.map(p => (
+                          <SelectItem key={p.id} value={p.id}>
+                            {p.name} {p.barcode && <span className="text-muted-foreground">({p.barcode})</span>}
+                          </SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
-                    <Input type="number" placeholder="Qty" value={itemQuantity} onChange={(e) => setItemQuantity(e.target.value)} />
-                    <Input type="number" placeholder="Unit Cost" value={itemCost} onChange={(e) => setItemCost(e.target.value)} />
                   </div>
-                  <Button type="button" variant="outline" size="sm" onClick={addItem}>
-                    <Plus className="h-4 w-4 mr-1" />Add Item
+
+                  {/* Quantity and Cost */}
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <Label>Quantity</Label>
+                      <Input type="number" placeholder="Qty" value={itemQuantity} onChange={(e) => setItemQuantity(e.target.value)} />
+                    </div>
+                    <div>
+                      <Label>Unit Cost (UGX)</Label>
+                      <Input type="number" placeholder="Unit Cost" value={itemCost} onChange={(e) => setItemCost(e.target.value)} />
+                    </div>
+                  </div>
+
+                  <Button type="button" variant="outline" onClick={addItem} className="w-full">
+                    <Plus className="h-4 w-4 mr-1" />Add Item to Order
                   </Button>
                 </CardContent>
               </Card>
