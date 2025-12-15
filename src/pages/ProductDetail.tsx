@@ -1,15 +1,72 @@
 import { useParams, Link } from "react-router-dom";
-import { Share2, Heart, Shield, Truck, Package, CheckCircle } from "lucide-react";
+import { useState, useEffect } from "react";
+import { Share2, Heart, Shield, Truck, CheckCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
 import Navbar from "@/components/Navbar";
 import InquiryForm from "@/components/InquiryForm";
-import { getProductById } from "@/data/products";
+import { supabase } from "@/integrations/supabase/client";
+import { formatCurrency } from "@/lib/currency";
+
+interface Product {
+  id: string;
+  name: string;
+  price: number;
+  image_url: string | null;
+  category: string;
+  description: string | null;
+  stock_quantity: number;
+  manufacturer: string | null;
+  model: string | null;
+  warranty_months: number | null;
+  condition: string | null;
+}
 
 const ProductDetail = () => {
   const { id } = useParams();
-  const product = getProductById(id || "");
+  const [product, setProduct] = useState<Product | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchProduct = async () => {
+      if (!id) {
+        setLoading(false);
+        return;
+      }
+      
+      const { data, error } = await supabase
+        .from("products")
+        .select("id, name, price, image_url, category, description, stock_quantity, manufacturer, model, warranty_months, condition")
+        .eq("id", id)
+        .eq("is_active", true)
+        .maybeSingle();
+
+      if (!error && data) {
+        setProduct(data);
+      }
+      setLoading(false);
+    };
+    fetchProduct();
+  }, [id]);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-background">
+        <Navbar />
+        <div className="container py-8">
+          <Skeleton className="h-8 w-48 mb-4" />
+          <div className="grid lg:grid-cols-3 gap-8">
+            <div className="lg:col-span-2">
+              <Skeleton className="aspect-video rounded-lg" />
+            </div>
+            <Skeleton className="h-96 rounded-lg" />
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   if (!product) {
     return (
@@ -24,6 +81,13 @@ const ProductDetail = () => {
       </div>
     );
   }
+
+  const specifications = [
+    product.manufacturer && { label: "Manufacturer", value: product.manufacturer },
+    product.model && { label: "Model", value: product.model },
+    product.condition && { label: "Condition", value: product.condition },
+    product.warranty_months && { label: "Warranty", value: `${product.warranty_months} months` },
+  ].filter(Boolean) as { label: string; value: string }[];
 
   return (
     <div className="min-h-screen bg-background">
@@ -46,11 +110,11 @@ const ProductDetail = () => {
               <CardContent className="p-0">
                 <div className="aspect-video overflow-hidden rounded-t-lg bg-secondary relative">
                   <img 
-                    src={product.image} 
-                    alt={product.title} 
+                    src={product.image_url || "/placeholder.svg"} 
+                    alt={product.name} 
                     className="w-full h-full object-contain"
                   />
-                  {!product.inStock && (
+                  {product.stock_quantity <= 0 && (
                     <div className="absolute top-4 left-4">
                       <Badge variant="secondary">Out of Stock</Badge>
                     </div>
@@ -61,14 +125,14 @@ const ProductDetail = () => {
                     <div>
                       <div className="flex items-center gap-2 mb-2">
                         <Badge variant="outline">{product.category}</Badge>
-                        {product.inStock && (
+                        {product.stock_quantity > 0 && (
                           <Badge className="bg-green-500/10 text-green-600 hover:bg-green-500/20">
                             <CheckCircle className="h-3 w-3 mr-1" />
                             In Stock
                           </Badge>
                         )}
                       </div>
-                      <h1 className="text-3xl font-bold mb-2">{product.title}</h1>
+                      <h1 className="text-3xl font-bold mb-2">{product.name}</h1>
                     </div>
                     <div className="flex gap-2">
                       <Button variant="outline" size="icon">
@@ -80,24 +144,28 @@ const ProductDetail = () => {
                     </div>
                   </div>
 
-                  <div className="text-4xl font-bold text-primary">{product.price}</div>
+                  <div className="text-4xl font-bold text-primary">{formatCurrency(product.price)}</div>
 
-                  <div className="border-t pt-4">
-                    <h2 className="text-xl font-semibold mb-3">Description</h2>
-                    <p className="text-muted-foreground leading-relaxed">{product.description}</p>
-                  </div>
-
-                  <div className="border-t pt-4">
-                    <h2 className="text-xl font-semibold mb-3">Specifications</h2>
-                    <div className="grid sm:grid-cols-2 gap-3">
-                      {product.specifications.map((spec) => (
-                        <div key={spec.label} className="flex justify-between py-2 border-b">
-                          <span className="text-muted-foreground">{spec.label}</span>
-                          <span className="font-medium">{spec.value}</span>
-                        </div>
-                      ))}
+                  {product.description && (
+                    <div className="border-t pt-4">
+                      <h2 className="text-xl font-semibold mb-3">Description</h2>
+                      <p className="text-muted-foreground leading-relaxed">{product.description}</p>
                     </div>
-                  </div>
+                  )}
+
+                  {specifications.length > 0 && (
+                    <div className="border-t pt-4">
+                      <h2 className="text-xl font-semibold mb-3">Specifications</h2>
+                      <div className="grid sm:grid-cols-2 gap-3">
+                        {specifications.map((spec) => (
+                          <div key={spec.label} className="flex justify-between py-2 border-b">
+                            <span className="text-muted-foreground">{spec.label}</span>
+                            <span className="font-medium">{spec.value}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
               </CardContent>
             </Card>
@@ -110,7 +178,7 @@ const ProductDetail = () => {
                 <p className="text-sm text-muted-foreground">
                   Send us a message and we'll get back to you within 24 hours.
                 </p>
-                <InquiryForm productTitle={product.title} productId={product.id} />
+                <InquiryForm productTitle={product.name} productId={product.id} />
               </CardContent>
             </Card>
 
