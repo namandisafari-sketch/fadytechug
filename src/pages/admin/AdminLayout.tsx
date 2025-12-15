@@ -27,7 +27,9 @@ import {
   UsersRound,
   Lock,
   CreditCard,
-  PaintBucket
+  PaintBucket,
+  PackageCheck,
+  Download
 } from 'lucide-react';
 import { useState } from 'react';
 import { cn } from '@/lib/utils';
@@ -40,6 +42,7 @@ const navItems = [
   { path: '/admin/products', icon: Package, label: 'Products' },
   { path: '/admin/inventory', icon: ClipboardList, label: 'Inventory' },
   { path: '/admin/barcodes', icon: Barcode, label: 'Barcode Tracking' },
+  { path: '/admin/stock-receiving', icon: PackageCheck, label: 'Stock Receiving' },
   { path: '/admin/sales', icon: Receipt, label: 'Sales & Refunds' },
   { path: '/admin/purchase-orders', icon: ShoppingBag, label: 'Purchase Orders' },
   { path: '/admin/expenses', icon: Wallet, label: 'Expenses' },
@@ -55,6 +58,7 @@ const navItems = [
 const adminOnlyItems = [
   { path: '/admin/staff', icon: UsersRound, label: 'Staff Management' },
   { path: '/admin/site-appearance', icon: PaintBucket, label: 'Site Appearance' },
+  { path: '/admin/backup', icon: Download, label: 'Data Backup' },
 ];
 
 const AdminLayout = () => {
