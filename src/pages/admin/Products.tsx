@@ -22,6 +22,11 @@ const LOCATIONS = ['Warehouse A', 'Warehouse B', 'Store Front', 'Service Center'
 const CONDITIONS = ['new', 'refurbished', 'open_box', 'used_like_new', 'used_good', 'damaged'];
 const MAX_FILE_SIZE = 200 * 1024; // 200KB
 
+interface Supplier {
+  id: string;
+  name: string;
+}
+
 interface Product {
   id: string;
   name: string;
@@ -42,8 +47,7 @@ interface Product {
   condition: string | null;
   warranty_months: number | null;
   unit_cost: number | null;
-  weight_kg: number | null;
-  dimensions: string | null;
+  supplier_id: string | null;
   created_at: string;
 }
 
@@ -53,6 +57,7 @@ const Products = () => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const quickNameRef = useRef<HTMLInputElement>(null);
   const [products, setProducts] = useState<Product[]>([]);
+  const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
@@ -84,15 +89,25 @@ const Products = () => {
   const [condition, setCondition] = useState('new');
   const [warrantyMonths, setWarrantyMonths] = useState('');
   const [unitCost, setUnitCost] = useState('');
-  const [weightKg, setWeightKg] = useState('');
-  const [dimensions, setDimensions] = useState('');
+  const [supplierId, setSupplierId] = useState('');
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
 
   useEffect(() => {
     fetchProducts();
+    fetchSuppliers();
   }, []);
+
+  const fetchSuppliers = async () => {
+    const { data, error } = await supabase
+      .from('suppliers')
+      .select('id, name')
+      .eq('is_active', true)
+      .order('name');
+    
+    if (!error) setSuppliers(data || []);
+  };
 
   const fetchProducts = async () => {
     const { data, error } = await supabase
@@ -122,8 +137,7 @@ const Products = () => {
     setCondition('new');
     setWarrantyMonths('');
     setUnitCost('');
-    setWeightKg('');
-    setDimensions('');
+    setSupplierId('');
     setImageUrl(null);
     setImageFile(null);
     setImagePreview(null);
@@ -202,8 +216,7 @@ const Products = () => {
     setCondition(product.condition || 'new');
     setWarrantyMonths(product.warranty_months?.toString() || '');
     setUnitCost(product.unit_cost?.toString() || '');
-    setWeightKg(product.weight_kg?.toString() || '');
-    setDimensions(product.dimensions || '');
+    setSupplierId(product.supplier_id || '');
     setImageUrl(product.image_url);
     setImagePreview(product.image_url);
     setImageFile(null);
@@ -326,8 +339,7 @@ const Products = () => {
         condition: condition || 'new',
         warranty_months: warrantyMonths ? parseInt(warrantyMonths) : null,
         unit_cost: unitCost ? parseFloat(unitCost) : null,
-        weight_kg: weightKg ? parseFloat(weightKg) : null,
-        dimensions: dimensions.trim() || null,
+        supplier_id: supplierId || null,
         image_url: uploadedImageUrl,
         created_by: user?.id
       };
@@ -488,8 +500,18 @@ const Products = () => {
                 </div>
               </div>
 
-              {/* Row 4: Reorder & Warranty */}
+              {/* Row 4: Supplier & Reorder */}
               <div className="grid grid-cols-4 gap-3">
+                <div>
+                  <Label className="font-bold">Supplier *</Label>
+                  <Select value={supplierId || "none"} onValueChange={(val) => setSupplierId(val === "none" ? "" : val)}>
+                    <SelectTrigger><SelectValue placeholder="Select supplier..." /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">Not assigned</SelectItem>
+                      {suppliers.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
                 <div>
                   <Label>Reorder Level</Label>
                   <Input type="number" value={reorderLevel} onChange={(e) => setReorderLevel(e.target.value)} placeholder="5" />
@@ -502,23 +524,15 @@ const Products = () => {
                   <Label>Warranty (Months)</Label>
                   <Input type="number" value={warrantyMonths} onChange={(e) => setWarrantyMonths(e.target.value)} placeholder="12" />
                 </div>
-                <div>
-                  <Label>Weight (kg)</Label>
-                  <Input type="number" step="0.1" value={weightKg} onChange={(e) => setWeightKg(e.target.value)} placeholder="2.5" />
-                </div>
               </div>
 
-              {/* Row 5: Description & Dimensions */}
+              {/* Row 5: Description & Toggles */}
               <div className="grid grid-cols-3 gap-3">
                 <div className="col-span-2">
                   <Label>Description</Label>
                   <Textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Product description..." className="h-20" />
                 </div>
                 <div className="space-y-3">
-                  <div>
-                    <Label>Dimensions (cm)</Label>
-                    <Input value={dimensions} onChange={(e) => setDimensions(e.target.value)} placeholder="30x20x5" />
-                  </div>
                   <div className="flex items-center justify-between p-2 bg-muted rounded">
                     <Label className="text-sm">Active</Label>
                     <Switch checked={isActive} onCheckedChange={setIsActive} />

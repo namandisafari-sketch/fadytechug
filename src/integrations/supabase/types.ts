@@ -330,6 +330,7 @@ export type Database = {
           serial_numbers: string[] | null
           sku: string | null
           stock_quantity: number
+          supplier_id: string | null
           unit_cost: number | null
           updated_at: string
           warranty_months: number | null
@@ -357,6 +358,7 @@ export type Database = {
           serial_numbers?: string[] | null
           sku?: string | null
           stock_quantity?: number
+          supplier_id?: string | null
           unit_cost?: number | null
           updated_at?: string
           warranty_months?: number | null
@@ -384,12 +386,21 @@ export type Database = {
           serial_numbers?: string[] | null
           sku?: string | null
           stock_quantity?: number
+          supplier_id?: string | null
           unit_cost?: number | null
           updated_at?: string
           warranty_months?: number | null
           weight_kg?: number | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "products_supplier_id_fkey"
+            columns: ["supplier_id"]
+            isOneToOne: false
+            referencedRelation: "suppliers"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       profiles: {
         Row: {
