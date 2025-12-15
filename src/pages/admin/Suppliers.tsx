@@ -16,6 +16,7 @@ import { Switch } from '@/components/ui/switch';
 import { formatCurrency } from '@/lib/currency';
 import { format } from 'date-fns';
 import fadyLogo from '@/assets/fady-logo.png';
+import { QRCodeSVG } from 'qrcode.react';
 
 interface Supplier {
   id: string;
@@ -750,9 +751,16 @@ const Suppliers = () => {
                 
                 <div className="border-t border-dashed border-border my-3" />
                 
-                <div className="footer text-center text-xs text-muted-foreground">
-                  <p>Thank you for your business</p>
-                  <p className="mt-1">{format(new Date(), 'dd/MM/yyyy HH:mm')}</p>
+                <div className="footer flex flex-col items-center text-xs text-muted-foreground space-y-3">
+                  <QRCodeSVG 
+                    value={`${window.location.origin}/admin/suppliers?payment=${receiptData.receiptNumber}`}
+                    size={80}
+                    level="M"
+                  />
+                  <div className="text-center">
+                    <p>Thank you for your business</p>
+                    <p className="mt-1">{format(new Date(), 'dd/MM/yyyy HH:mm')}</p>
+                  </div>
                 </div>
               </div>
               
