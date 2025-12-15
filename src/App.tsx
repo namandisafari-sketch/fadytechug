@@ -27,6 +27,8 @@ import Banking from "./pages/admin/Banking";
 import PurchaseOrders from "./pages/admin/PurchaseOrders";
 import Reports from "./pages/admin/Reports";
 import Barcodes from "./pages/admin/Barcodes";
+import StockReceiving from "./pages/admin/StockReceiving";
+import DataBackup from "./pages/admin/DataBackup";
 import StaffManagement from "./pages/admin/StaffManagement";
 import SiteAppearance from "./pages/admin/SiteAppearance";
 
@@ -64,6 +66,8 @@ function AppContent() {
             <Route path="banking" element={<Banking />} />
             <Route path="reports" element={<Reports />} />
             <Route path="barcodes" element={<Barcodes />} />
+            <Route path="stock-receiving" element={<StockReceiving />} />
+            <Route path="backup" element={<DataBackup />} />
             <Route path="customers" element={<Customers />} />
             <Route path="inquiries" element={<Inquiries />} />
             <Route path="settings" element={<Settings />} />
