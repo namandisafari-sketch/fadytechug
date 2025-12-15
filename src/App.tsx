@@ -26,7 +26,7 @@ import Suppliers from "./pages/admin/Suppliers";
 import Banking from "./pages/admin/Banking";
 import PurchaseOrders from "./pages/admin/PurchaseOrders";
 import Reports from "./pages/admin/Reports";
-import SerialNumbers from "./pages/admin/SerialNumbers";
+import Barcodes from "./pages/admin/Barcodes";
 import StaffManagement from "./pages/admin/StaffManagement";
 import SiteAppearance from "./pages/admin/SiteAppearance";
 
@@ -63,7 +63,7 @@ function AppContent() {
             
             <Route path="banking" element={<Banking />} />
             <Route path="reports" element={<Reports />} />
-            <Route path="serial-numbers" element={<SerialNumbers />} />
+            <Route path="barcodes" element={<Barcodes />} />
             <Route path="customers" element={<Customers />} />
             <Route path="inquiries" element={<Inquiries />} />
             <Route path="settings" element={<Settings />} />

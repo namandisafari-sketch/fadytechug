@@ -13,7 +13,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { formatCurrency } from '@/lib/currency';
 import { 
-  Hash, Search, Plus, History, Package, MapPin, 
+  Barcode, Search, Plus, History, Package, MapPin, 
   Calendar, Edit, Trash2, Truck, ArrowRightLeft 
 } from 'lucide-react';
 import { format } from 'date-fns';
@@ -64,7 +64,7 @@ const STATUS_OPTIONS = ['in_stock', 'sold', 'reserved', 'in_repair', 'returned',
 const CONDITION_OPTIONS = ['new', 'refurbished', 'open_box', 'used_like_new', 'used_good', 'damaged'];
 const LOCATION_OPTIONS = ['Warehouse A', 'Warehouse B', 'Store Front', 'Service Center', 'Returns'];
 
-const SerialNumberTracker = () => {
+const BarcodeTracker = () => {
   const { user } = useAuth();
   const { toast } = useToast();
   const [serialUnits, setSerialUnits] = useState<SerialUnit[]>([]);
@@ -83,7 +83,7 @@ const SerialNumberTracker = () => {
   // Form state
   const [formData, setFormData] = useState({
     product_id: '',
-    serial_number: '',
+    barcode: '',
     status: 'in_stock',
     condition: 'new',
     location: '',
@@ -158,7 +158,7 @@ const SerialNumberTracker = () => {
   const resetForm = () => {
     setFormData({
       product_id: '',
-      serial_number: '',
+      barcode: '',
       status: 'in_stock',
       condition: 'new',
       location: '',
@@ -171,8 +171,8 @@ const SerialNumberTracker = () => {
   };
 
   const handleSubmit = async () => {
-    if (!formData.product_id || !formData.serial_number) {
-      toast({ title: 'Error', description: 'Product and serial number are required', variant: 'destructive' });
+    if (!formData.product_id || !formData.barcode) {
+      toast({ title: 'Error', description: 'Product and barcode are required', variant: 'destructive' });
       return;
     }
 
@@ -180,7 +180,7 @@ const SerialNumberTracker = () => {
     try {
       const unitData = {
         product_id: formData.product_id,
-        serial_number: formData.serial_number,
+        serial_number: formData.barcode,
         status: formData.status,
         condition: formData.condition || null,
         location: formData.location || null,
@@ -213,7 +213,7 @@ const SerialNumberTracker = () => {
           });
         }
 
-        toast({ title: 'Success', description: 'Serial unit updated' });
+        toast({ title: 'Success', description: 'Stock unit updated' });
       } else {
         // Create new
         const { data, error } = await supabase
@@ -234,7 +234,7 @@ const SerialNumberTracker = () => {
           performed_by: user?.id
         });
 
-        toast({ title: 'Success', description: 'Serial unit registered' });
+        toast({ title: 'Success', description: 'Stock unit registered' });
       }
 
       setDialogOpen(false);
@@ -251,7 +251,7 @@ const SerialNumberTracker = () => {
     setSelectedUnit(unit);
     setFormData({
       product_id: unit.product_id,
-      serial_number: unit.serial_number,
+      barcode: unit.serial_number,
       status: unit.status,
       condition: unit.condition || 'new',
       location: unit.location || '',
@@ -335,13 +335,13 @@ const SerialNumberTracker = () => {
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm('Are you sure you want to delete this serial unit?')) return;
+    if (!confirm('Are you sure you want to delete this stock unit?')) return;
 
     const { error } = await supabase.from('serial_units').delete().eq('id', id);
     if (error) {
       toast({ title: 'Error', description: error.message, variant: 'destructive' });
     } else {
-      toast({ title: 'Success', description: 'Serial unit deleted' });
+      toast({ title: 'Success', description: 'Stock unit deleted' });
       fetchSerialUnits();
     }
   };
@@ -386,7 +386,7 @@ const SerialNumberTracker = () => {
           <CardContent className="pt-4">
             <div className="flex items-center gap-3">
               <div className="p-2 bg-blue-100 dark:bg-blue-900 rounded-lg">
-                <Hash className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+                <Barcode className="h-5 w-5 text-blue-600 dark:text-blue-400" />
               </div>
               <div>
                 <p className="text-xs text-muted-foreground">Total Units</p>
@@ -454,14 +454,14 @@ const SerialNumberTracker = () => {
         <CardHeader>
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
             <CardTitle className="flex items-center gap-2">
-              <Hash className="h-5 w-5" />
-              Serial Number Tracking
+              <Barcode className="h-5 w-5" />
+              Barcode Tracking
             </CardTitle>
             <div className="flex flex-col md:flex-row gap-2">
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input
-                  placeholder="Search serial, product, SKU..."
+                  placeholder="Search barcode, product, SKU..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   className="pl-9 w-full md:w-64"
@@ -484,7 +484,7 @@ const SerialNumberTracker = () => {
                 </DialogTrigger>
                 <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
                   <DialogHeader>
-                    <DialogTitle>{selectedUnit ? 'Edit' : 'Register'} Serial Unit</DialogTitle>
+                    <DialogTitle>{selectedUnit ? 'Edit' : 'Register'} Stock Unit</DialogTitle>
                   </DialogHeader>
                   <div className="space-y-4">
                     <div>
@@ -502,11 +502,11 @@ const SerialNumberTracker = () => {
                     </div>
 
                     <div>
-                      <Label>Serial Number *</Label>
+                      <Label>Barcode *</Label>
                       <Input
-                        value={formData.serial_number}
-                        onChange={(e) => setFormData({...formData, serial_number: e.target.value})}
-                        placeholder="Enter serial number"
+                        value={formData.barcode}
+                        onChange={(e) => setFormData({...formData, barcode: e.target.value})}
+                        placeholder="Enter or scan barcode"
                       />
                     </div>
 
@@ -596,7 +596,7 @@ const SerialNumberTracker = () => {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Serial Number</TableHead>
+                  <TableHead>Barcode</TableHead>
                   <TableHead>Product</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Location</TableHead>
@@ -610,7 +610,7 @@ const SerialNumberTracker = () => {
                 {filteredUnits.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
-                      No serial units found
+                      No stock units found
                     </TableCell>
                   </TableRow>
                 ) : (
@@ -753,4 +753,4 @@ const SerialNumberTracker = () => {
   );
 };
 
-export default SerialNumberTracker;
+export default BarcodeTracker;
