@@ -11,9 +11,10 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
-import { Plus, Package, Edit, Trash2, Search, Upload, X, Image, Barcode, Building2, MapPin, Scale, Zap, Check } from 'lucide-react';
+import { Plus, Package, Edit, Trash2, Search, Upload, X, Image, Barcode, Building2, MapPin, Scale, Zap, Check, Loader2 } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
 import { formatCurrency } from '@/lib/currency';
+import { compressImage, formatFileSize } from '@/lib/imageCompression';
 
 
 const CATEGORIES = ['Routers', 'Switches', 'Cables', 'Servers', 'Accessories', 'Networking', 'Other'];
@@ -210,18 +211,9 @@ const Products = () => {
   };
 
 
-  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-
-    if (file.size > MAX_FILE_SIZE) {
-      toast({ 
-        title: 'File too large', 
-        description: 'Maximum file size is 200KB', 
-        variant: 'destructive' 
-      });
-      return;
-    }
 
     if (!file.type.startsWith('image/')) {
       toast({ 
@@ -232,8 +224,39 @@ const Products = () => {
       return;
     }
 
-    setImageFile(file);
-    setImagePreview(URL.createObjectURL(file));
+    // Check if compression is needed
+    if (file.size > MAX_FILE_SIZE) {
+      setUploading(true);
+      toast({ 
+        title: 'Compressing image...', 
+        description: `Original size: ${formatFileSize(file.size)}` 
+      });
+
+      try {
+        const result = await compressImage(file);
+        
+        if (result.wasCompressed) {
+          toast({ 
+            title: 'Image compressed', 
+            description: `Reduced from ${formatFileSize(result.originalSize)} to ${formatFileSize(result.compressedSize)}` 
+          });
+        }
+
+        setImageFile(result.file);
+        setImagePreview(URL.createObjectURL(result.file));
+      } catch (error: any) {
+        toast({ 
+          title: 'Compression failed', 
+          description: error.message, 
+          variant: 'destructive' 
+        });
+      } finally {
+        setUploading(false);
+      }
+    } else {
+      setImageFile(file);
+      setImagePreview(URL.createObjectURL(file));
+    }
   };
 
   const uploadImage = async (): Promise<string | null> => {
@@ -376,12 +399,22 @@ const Products = () => {
                       </Button>
                     </div>
                   ) : (
-                    <div onClick={() => fileInputRef.current?.click()} className="w-full h-32 border-2 border-dashed rounded-lg flex flex-col items-center justify-center cursor-pointer hover:border-primary transition-colors">
-                      <Upload className="h-6 w-6 text-muted-foreground mb-1" />
-                      <p className="text-xs text-muted-foreground">Add Image</p>
+                    <div onClick={() => !uploading && fileInputRef.current?.click()} className={`w-full h-32 border-2 border-dashed rounded-lg flex flex-col items-center justify-center cursor-pointer hover:border-primary transition-colors ${uploading ? 'opacity-50 cursor-wait' : ''}`}>
+                      {uploading ? (
+                        <>
+                          <Loader2 className="h-6 w-6 text-muted-foreground mb-1 animate-spin" />
+                          <p className="text-xs text-muted-foreground">Compressing...</p>
+                        </>
+                      ) : (
+                        <>
+                          <Upload className="h-6 w-6 text-muted-foreground mb-1" />
+                          <p className="text-xs text-muted-foreground">Add Image</p>
+                          <p className="text-[10px] text-muted-foreground">Auto-compress if &gt;200KB</p>
+                        </>
+                      )}
                     </div>
                   )}
-                  <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleFileSelect} />
+                  <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleFileSelect} disabled={uploading} />
                 </div>
                 <div className="col-span-2 space-y-3">
                   <div>

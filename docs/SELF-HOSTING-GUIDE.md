@@ -2,6 +2,26 @@
 
 This guide walks you through deploying Fady Technologies on your own Linode server with a self-hosted PostgreSQL database.
 
+## Table of Contents
+
+1. [Prerequisites](#prerequisites)
+2. [Architecture Overview](#architecture-overview)
+3. [Server Setup](#step-1-set-up-your-linode-server)
+4. [Install Required Software](#step-2-install-required-software)
+5. [Configure PostgreSQL](#step-3-configure-postgresql)
+6. [Deploy the Application](#step-4-deploy-the-application)
+7. [Configure Nginx](#step-5-configure-nginx)
+8. [SSL Certificate](#step-6-ssl-certificate-https)
+9. [Firewall Configuration](#step-7-firewall-configuration)
+10. [Import Your Data](#step-8-import-your-data)
+11. [Database Backups](#step-9-database-backups-automated)
+12. [Modifying for Self-Hosting](#step-10-modifying-the-app-for-self-hosting)
+13. [File Storage](#step-11-file-storage-setup)
+14. [Troubleshooting](#troubleshooting)
+15. [Security Checklist](#security-checklist)
+
+---
+
 ## Prerequisites
 
 - A Linode account (or any VPS provider)
@@ -19,6 +39,12 @@ This guide walks you through deploying Fady Technologies on your own Linode serv
 │  │  (Reverse   │→ │  (Vite      │→ │    (Database)       │  │
 │  │   Proxy)    │  │   Build)    │  │                     │  │
 │  └─────────────┘  └─────────────┘  └─────────────────────┘  │
+│                          ↓                                   │
+│                   ┌─────────────┐                            │
+│                   │   Local     │                            │
+│                   │   Storage   │                            │
+│                   │  (uploads)  │                            │
+│                   └─────────────┘                            │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -155,6 +181,13 @@ CREATE TABLE IF NOT EXISTS user_roles (
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+CREATE TABLE IF NOT EXISTS page_permissions (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL,
+    page_path TEXT NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
 -- Products
 CREATE TABLE IF NOT EXISTS products (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -178,6 +211,7 @@ CREATE TABLE IF NOT EXISTS products (
     warranty_months INTEGER,
     weight_kg NUMERIC,
     dimensions TEXT,
+    serial_numbers TEXT[],
     created_by UUID REFERENCES profiles(id),
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
@@ -243,7 +277,7 @@ CREATE TABLE IF NOT EXISTS purchase_orders (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     order_number TEXT NOT NULL,
     supplier_id UUID NOT NULL REFERENCES suppliers(id),
-    status TEXT DEFAULT 'pending',
+    status TEXT DEFAULT 'awaiting_delivery',
     total_amount NUMERIC DEFAULT 0,
     notes TEXT,
     ordered_by UUID REFERENCES profiles(id),
@@ -260,6 +294,22 @@ CREATE TABLE IF NOT EXISTS purchase_order_items (
     unit_cost NUMERIC NOT NULL,
     total_cost NUMERIC NOT NULL,
     received_quantity INTEGER DEFAULT 0,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Supplier Payments
+CREATE TABLE IF NOT EXISTS supplier_payments (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    supplier_id UUID NOT NULL REFERENCES suppliers(id),
+    purchase_order_id UUID REFERENCES purchase_orders(id),
+    amount NUMERIC NOT NULL,
+    payment_method TEXT DEFAULT 'bank_transfer',
+    payment_source TEXT DEFAULT 'bank',
+    bank_name TEXT,
+    reference_number TEXT,
+    payment_date DATE DEFAULT CURRENT_DATE,
+    notes TEXT,
+    paid_by UUID REFERENCES profiles(id),
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
@@ -296,6 +346,29 @@ CREATE TABLE IF NOT EXISTS serial_units (
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+CREATE TABLE IF NOT EXISTS serial_unit_history (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    serial_unit_id UUID NOT NULL REFERENCES serial_units(id),
+    action TEXT NOT NULL,
+    previous_status TEXT,
+    new_status TEXT,
+    previous_location TEXT,
+    new_location TEXT,
+    notes TEXT,
+    performed_by UUID REFERENCES profiles(id),
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Storage Locations
+CREATE TABLE IF NOT EXISTS storage_locations (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    name TEXT NOT NULL,
+    description TEXT,
+    is_active BOOLEAN DEFAULT true,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
 -- Expenses
 CREATE TABLE IF NOT EXISTS expenses (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -322,6 +395,21 @@ CREATE TABLE IF NOT EXISTS bank_deposits (
     notes TEXT,
     deposited_by UUID REFERENCES profiles(id),
     created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS cash_register (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    date DATE NOT NULL,
+    opening_balance NUMERIC DEFAULT 0,
+    total_sales NUMERIC DEFAULT 0,
+    total_expenses NUMERIC DEFAULT 0,
+    total_refunds NUMERIC DEFAULT 0,
+    total_deposits NUMERIC DEFAULT 0,
+    closing_balance NUMERIC DEFAULT 0,
+    closed_by UUID REFERENCES profiles(id),
+    notes TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
 -- Refunds
@@ -366,9 +454,46 @@ CREATE TABLE IF NOT EXISTS inquiries (
 -- Indexes for performance
 CREATE INDEX IF NOT EXISTS idx_products_category ON products(category);
 CREATE INDEX IF NOT EXISTS idx_products_barcode ON products(barcode);
+CREATE INDEX IF NOT EXISTS idx_products_sku ON products(sku);
+CREATE INDEX IF NOT EXISTS idx_products_is_active ON products(is_active);
 CREATE INDEX IF NOT EXISTS idx_sales_created_at ON sales(created_at);
+CREATE INDEX IF NOT EXISTS idx_sales_receipt_number ON sales(receipt_number);
 CREATE INDEX IF NOT EXISTS idx_serial_units_product ON serial_units(product_id);
+CREATE INDEX IF NOT EXISTS idx_serial_units_serial_number ON serial_units(serial_number);
 CREATE INDEX IF NOT EXISTS idx_inventory_transactions_product ON inventory_transactions(product_id);
+CREATE INDEX IF NOT EXISTS idx_expenses_expense_date ON expenses(expense_date);
+CREATE INDEX IF NOT EXISTS idx_supplier_payments_supplier ON supplier_payments(supplier_id);
+
+-- Helper Functions
+CREATE OR REPLACE FUNCTION generate_receipt_number()
+RETURNS TEXT AS $$
+DECLARE
+  receipt_num TEXT;
+  today_count INTEGER;
+BEGIN
+  SELECT COUNT(*) + 1 INTO today_count
+  FROM sales
+  WHERE DATE(created_at) = CURRENT_DATE;
+  
+  receipt_num := 'RCP-' || TO_CHAR(CURRENT_DATE, 'YYYYMMDD') || '-' || LPAD(today_count::TEXT, 4, '0');
+  RETURN receipt_num;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE FUNCTION generate_order_number()
+RETURNS TEXT AS $$
+DECLARE
+  order_num TEXT;
+  today_count INTEGER;
+BEGIN
+  SELECT COUNT(*) + 1 INTO today_count
+  FROM purchase_orders
+  WHERE DATE(created_at) = CURRENT_DATE;
+  
+  order_num := 'PO-' || TO_CHAR(CURRENT_DATE, 'YYYYMMDD') || '-' || LPAD(today_count::TEXT, 4, '0');
+  RETURN order_num;
+END;
+$$ LANGUAGE plpgsql;
 ```
 
 Import the schema:
@@ -406,6 +531,10 @@ DATABASE_URL=postgresql://fady_admin:your_secure_password_here@localhost:5432/fa
 VITE_APP_NAME="Fady Technologies"
 VITE_APP_URL="https://your-domain.com"
 
+# File Storage
+VITE_UPLOAD_DIR="/home/fadytech/uploads"
+VITE_MAX_FILE_SIZE=200000
+
 # For authentication (if using external auth service)
 # VITE_AUTH_SECRET=your_auth_secret
 ```
@@ -439,6 +568,9 @@ server {
     listen 80;
     server_name your-domain.com www.your-domain.com;
 
+    # Max upload size (for product images)
+    client_max_body_size 10M;
+
     location / {
         proxy_pass http://localhost:4173;
         proxy_http_version 1.1;
@@ -449,6 +581,13 @@ server {
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
         proxy_cache_bypass $http_upgrade;
+    }
+
+    # Serve uploaded files
+    location /uploads {
+        alias /home/fadytech/uploads;
+        expires 1y;
+        add_header Cache-Control "public, immutable";
     }
 
     # Gzip compression
@@ -506,8 +645,34 @@ const pool = new Pool({
 async function importBackup(filePath) {
   const backup = JSON.parse(fs.readFileSync(filePath, 'utf8'));
   
-  for (const [tableName, records] of Object.entries(backup.tables)) {
-    if (records.length === 0) continue;
+  // Import order matters due to foreign key constraints
+  const tableOrder = [
+    'profiles',
+    'user_roles',
+    'page_permissions',
+    'storage_locations',
+    'suppliers',
+    'customers',
+    'products',
+    'sales',
+    'sale_items',
+    'purchase_orders',
+    'purchase_order_items',
+    'supplier_payments',
+    'inventory_transactions',
+    'serial_units',
+    'serial_unit_history',
+    'expenses',
+    'bank_deposits',
+    'cash_register',
+    'refunds',
+    'site_settings',
+    'inquiries'
+  ];
+  
+  for (const tableName of tableOrder) {
+    const records = backup.tables[tableName];
+    if (!records || records.length === 0) continue;
     
     console.log(`Importing ${records.length} records into ${tableName}...`);
     
@@ -630,6 +795,110 @@ For self-hosted authentication, consider:
 1. **Passport.js** with local strategy
 2. **Auth.js** (formerly NextAuth)
 3. **Lucia Auth** - lightweight auth library
+4. **Custom JWT implementation**
+
+## Step 11: File Storage Setup
+
+### 11.1 Create Upload Directory
+
+```bash
+mkdir -p /home/fadytech/uploads/products
+chmod 755 /home/fadytech/uploads
+```
+
+### 11.2 Local File Upload Handler
+
+Create an Express endpoint or similar for file uploads:
+
+```javascript
+// server/upload.js
+const express = require('express');
+const multer = require('multer');
+const path = require('path');
+
+const router = express.Router();
+
+const storage = multer.diskStorage({
+  destination: '/home/fadytech/uploads/products',
+  filename: (req, file, cb) => {
+    const uniqueName = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    cb(null, `${uniqueName}${path.extname(file.originalname)}`);
+  }
+});
+
+const upload = multer({
+  storage,
+  limits: { fileSize: 200 * 1024 }, // 200KB limit
+  fileFilter: (req, file, cb) => {
+    if (file.mimetype.startsWith('image/')) {
+      cb(null, true);
+    } else {
+      cb(new Error('Only images allowed'));
+    }
+  }
+});
+
+router.post('/upload', upload.single('image'), (req, res) => {
+  if (!req.file) {
+    return res.status(400).json({ error: 'No file uploaded' });
+  }
+  
+  const publicUrl = `${process.env.VITE_APP_URL}/uploads/products/${req.file.filename}`;
+  res.json({ url: publicUrl });
+});
+
+module.exports = router;
+```
+
+---
+
+## System Features Reference
+
+### Core Features
+
+| Feature | Description |
+|---------|-------------|
+| Point of Sale | Process in-store sales with barcode scanning |
+| Products | Full product catalog management |
+| Inventory | Stock tracking with serial numbers |
+| Sales | Complete sales history and receipts |
+| Customers | Customer database management |
+| Suppliers | Supplier and payment tracking |
+| Purchase Orders | Order and receive stock |
+| Expenses | Business expense tracking |
+| Banking | Cash register and bank deposits |
+| Reports | Financial reports and analytics |
+
+### Image Handling
+
+The application includes automatic image compression:
+- **Maximum size**: 200KB per image
+- **Auto-compression**: Images larger than 200KB are automatically compressed
+- **Supported formats**: JPG, PNG, WebP, GIF
+- **Output format**: Compressed images are converted to JPEG for optimal size
+
+### Receipt & Barcode Features
+
+- QR codes on receipts link to receipt details
+- Barcode scanning for products in POS
+- Receipt barcode scanning for quick lookup
+
+### Thermal Printer Support
+
+Configure in Settings → Printer:
+- Browser printing (standard)
+- Thermal printer support (58mm, 80mm paper)
+- Auto-print after sale
+- Cash drawer opening command
+
+### Storage Locations
+
+Manage inventory locations in Settings → Locations:
+- Create custom storage locations
+- Track stock across multiple locations
+- "Store Front" location auto-publishes products
+
+---
 
 ## Troubleshooting
 
@@ -646,6 +915,16 @@ For self-hosted authentication, consider:
 3. **Permission denied**
    - Ensure proper file ownership: `chown -R fadytech:fadytech /home/fadytech`
 
+4. **Images not uploading**
+   - Check upload directory permissions
+   - Verify Nginx client_max_body_size
+   - Check disk space: `df -h`
+
+5. **Receipt not printing**
+   - Verify browser print settings
+   - For thermal printers, check USB/serial connection
+   - Test with browser print first
+
 ### Useful Commands
 
 ```bash
@@ -660,6 +939,15 @@ sudo tail -f /var/log/postgresql/postgresql-14-main.log
 
 # Check Nginx logs
 sudo tail -f /var/log/nginx/error.log
+
+# Check disk space
+df -h
+
+# Check memory usage
+free -m
+
+# Monitor system resources
+htop
 ```
 
 ## Security Checklist
@@ -671,6 +959,9 @@ sudo tail -f /var/log/nginx/error.log
 - [ ] Fail2ban installed for brute-force protection
 - [ ] Non-root user for app management
 - [ ] Environment variables secured
+- [ ] Upload directory properly secured
+- [ ] Database user has minimal required privileges
+- [ ] Nginx security headers configured
 
 ## Support
 
@@ -679,6 +970,10 @@ For issues specific to this deployment, check:
 - Linode documentation: https://www.linode.com/docs/
 - Nginx documentation: https://nginx.org/en/docs/
 
+For system-specific help:
+- Developer contact: [kabejjasystems.store](https://kabejjasystems.store)
+
 ---
 
-*Last updated: 2025-01-15*
+*Last updated: December 2024*
+*System Version: 1.0*
