@@ -54,8 +54,13 @@ const StaffManagement = () => {
   const [selectedPages, setSelectedPages] = useState<string[]>([]);
   
   // New user form
-  const [newUserEmail, setNewUserEmail] = useState('');
   const [newUserDialogOpen, setNewUserDialogOpen] = useState(false);
+  const [newUserEmail, setNewUserEmail] = useState('');
+  const [newUserPassword, setNewUserPassword] = useState('');
+  const [newUserName, setNewUserName] = useState('');
+  const [newUserRole, setNewUserRole] = useState<'admin' | 'staff'>('staff');
+  const [newUserPages, setNewUserPages] = useState<string[]>([]);
+  const [creatingUser, setCreatingUser] = useState(false);
 
   useEffect(() => {
     if (isAdmin) {
@@ -205,6 +210,64 @@ const StaffManagement = () => {
     }
   };
 
+  const createNewUser = async () => {
+    if (!newUserEmail || !newUserPassword) {
+      toast({ title: 'Error', description: 'Email and password are required', variant: 'destructive' });
+      return;
+    }
+
+    if (newUserPassword.length < 6) {
+      toast({ title: 'Error', description: 'Password must be at least 6 characters', variant: 'destructive' });
+      return;
+    }
+
+    setCreatingUser(true);
+
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      const response = await supabase.functions.invoke('create-user', {
+        body: {
+          email: newUserEmail,
+          password: newUserPassword,
+          full_name: newUserName || undefined,
+          role: newUserRole,
+          page_permissions: newUserRole === 'staff' ? newUserPages : undefined
+        }
+      });
+
+      if (response.error) {
+        throw new Error(response.error.message);
+      }
+
+      if (response.data?.error) {
+        throw new Error(response.data.error);
+      }
+
+      toast({ title: 'Success', description: 'User created successfully' });
+      setNewUserDialogOpen(false);
+      setNewUserEmail('');
+      setNewUserPassword('');
+      setNewUserName('');
+      setNewUserRole('staff');
+      setNewUserPages([]);
+      fetchStaffMembers();
+
+    } catch (error: any) {
+      toast({ title: 'Error', description: error.message, variant: 'destructive' });
+    } finally {
+      setCreatingUser(false);
+    }
+  };
+
+  const toggleNewUserPage = (path: string) => {
+    setNewUserPages(prev => 
+      prev.includes(path) 
+        ? prev.filter(p => p !== path)
+        : [...prev, path]
+    );
+  };
+
   const filteredMembers = staffMembers.filter(m =>
     m.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
     (m.full_name?.toLowerCase() || '').includes(searchTerm.toLowerCase())
@@ -223,9 +286,15 @@ const StaffManagement = () => {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold text-foreground">Staff Management</h1>
-        <p className="text-muted-foreground">Manage user roles and page access permissions</p>
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-bold text-foreground">Staff Management</h1>
+          <p className="text-muted-foreground">Manage user roles and page access permissions</p>
+        </div>
+        <Button onClick={() => setNewUserDialogOpen(true)}>
+          <UserPlus className="h-4 w-4 mr-2" />
+          Create User
+        </Button>
       </div>
 
       {/* Stats */}
@@ -469,6 +538,126 @@ const StaffManagement = () => {
               </Button>
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Create New User Dialog */}
+      <Dialog open={newUserDialogOpen} onOpenChange={setNewUserDialogOpen}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Create New User</DialogTitle>
+          </DialogHeader>
+          
+          <div className="space-y-6">
+            {/* Basic Info */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="new-email">Email *</Label>
+                <Input
+                  id="new-email"
+                  type="email"
+                  placeholder="user@example.com"
+                  value={newUserEmail}
+                  onChange={(e) => setNewUserEmail(e.target.value)}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="new-password">Password *</Label>
+                <Input
+                  id="new-password"
+                  type="password"
+                  placeholder="Min 6 characters"
+                  value={newUserPassword}
+                  onChange={(e) => setNewUserPassword(e.target.value)}
+                />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="new-name">Full Name</Label>
+              <Input
+                id="new-name"
+                placeholder="John Doe"
+                value={newUserName}
+                onChange={(e) => setNewUserName(e.target.value)}
+              />
+            </div>
+
+            {/* Role Selection */}
+            <div className="space-y-2">
+              <Label>Role</Label>
+              <Select value={newUserRole} onValueChange={(v) => setNewUserRole(v as 'admin' | 'staff')}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="admin">Admin (Full Access)</SelectItem>
+                  <SelectItem value="staff">Staff (Limited Access)</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                {newUserRole === 'admin' 
+                  ? 'Admins have access to all pages and can manage other users.'
+                  : 'Staff members only have access to selected pages below.'}
+              </p>
+            </div>
+
+            {/* Page Permissions for Staff */}
+            {newUserRole === 'staff' && (
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <Label>Page Access</Label>
+                  <div className="flex gap-2">
+                    <Button 
+                      size="sm" 
+                      variant="outline" 
+                      onClick={() => setNewUserPages(ADMIN_PAGES.map(p => p.path))}
+                    >
+                      Select All
+                    </Button>
+                    <Button 
+                      size="sm" 
+                      variant="outline" 
+                      onClick={() => setNewUserPages([])}
+                    >
+                      Deselect All
+                    </Button>
+                  </div>
+                </div>
+                
+                <div className="grid grid-cols-1 gap-3 max-h-60 overflow-y-auto p-1">
+                  {ADMIN_PAGES.map(page => (
+                    <div 
+                      key={page.path}
+                      className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${
+                        newUserPages.includes(page.path) 
+                          ? 'border-primary bg-primary/5' 
+                          : 'border-border hover:bg-muted/50'
+                      }`}
+                      onClick={() => toggleNewUserPage(page.path)}
+                    >
+                      <Checkbox 
+                        checked={newUserPages.includes(page.path)}
+                        onCheckedChange={() => toggleNewUserPage(page.path)}
+                      />
+                      <div className="flex-1">
+                        <p className="font-medium text-sm">{page.label}</p>
+                        <p className="text-xs text-muted-foreground">{page.description}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                
+                <p className="text-sm text-muted-foreground">
+                  Selected: {newUserPages.length} of {ADMIN_PAGES.length} pages
+                </p>
+              </div>
+            )}
+
+            <Button onClick={createNewUser} disabled={creatingUser} className="w-full">
+              {creatingUser ? 'Creating User...' : 'Create User'}
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
     </div>
