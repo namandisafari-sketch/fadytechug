@@ -58,7 +58,7 @@ interface POWithItems extends PurchaseOrder {
   }>;
 }
 
-const STATUS_OPTIONS = ['pending', 'ordered', 'partially_received', 'received', 'cancelled'];
+const STATUS_OPTIONS = ['awaiting_delivery', 'partially_received', 'received', 'cancelled'];
 
 const PurchaseOrders = () => {
   const { user, isAdmin } = useAuth();
@@ -166,7 +166,7 @@ const PurchaseOrders = () => {
           total_amount: totalAmount,
           notes: notes || null,
           ordered_by: user?.id,
-          status: 'pending'
+          status: 'awaiting_delivery'
         })
         .select()
         .single();
@@ -278,12 +278,21 @@ const PurchaseOrders = () => {
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'pending': return 'secondary';
-      case 'ordered': return 'default';
+      case 'awaiting_delivery': return 'default';
       case 'partially_received': return 'outline';
-      case 'received': return 'default';
+      case 'received': return 'secondary';
       case 'cancelled': return 'destructive';
       default: return 'secondary';
+    }
+  };
+
+  const getStatusLabel = (status: string) => {
+    switch (status) {
+      case 'awaiting_delivery': return 'Awaiting Delivery';
+      case 'partially_received': return 'Partially Received';
+      case 'received': return 'Received';
+      case 'cancelled': return 'Cancelled';
+      default: return status.replace('_', ' ');
     }
   };
 
@@ -409,7 +418,7 @@ const PurchaseOrders = () => {
           <SelectTrigger className="w-48"><SelectValue placeholder="Filter status" /></SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All Status</SelectItem>
-            {STATUS_OPTIONS.map(s => <SelectItem key={s} value={s} className="capitalize">{s.replace('_', ' ')}</SelectItem>)}
+            {STATUS_OPTIONS.map(s => <SelectItem key={s} value={s}>{getStatusLabel(s)}</SelectItem>)}
           </SelectContent>
         </Select>
       </div>
@@ -440,8 +449,8 @@ const PurchaseOrders = () => {
                   <TableCell className="font-mono">{order.order_number}</TableCell>
                   <TableCell>{order.suppliers?.name}</TableCell>
                   <TableCell>
-                    <Badge variant={getStatusColor(order.status)} className="capitalize">
-                      {order.status.replace('_', ' ')}
+                    <Badge variant={getStatusColor(order.status)}>
+                      {getStatusLabel(order.status)}
                     </Badge>
                   </TableCell>
                   <TableCell className="text-right">{formatCurrency(order.total_amount)}</TableCell>
