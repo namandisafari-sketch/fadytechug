@@ -98,17 +98,33 @@ const AdminLayout = () => {
 
   // Check if current page is accessible
   const currentPath = location.pathname;
-  const isCurrentPageAccessible = hasPageAccess(currentPath) || 
-    adminOnlyItems.some(item => currentPath.startsWith(item.path));
+  const isAdminOnlyPage = adminOnlyItems.some(item => currentPath.startsWith(item.path));
   
-  // If staff member tries to access a page they don't have permission for
-  if (!isAdmin && !isCurrentPageAccessible && currentPath !== '/admin') {
+  // Admin-only pages require admin role
+  if (isAdminOnlyPage && !isAdmin) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="text-center space-y-4">
+          <Lock className="h-16 w-16 mx-auto text-muted-foreground" />
+          <h1 className="text-2xl font-bold">Access Denied</h1>
+          <p className="text-muted-foreground">This page is only accessible to administrators.</p>
+          <Button onClick={() => navigate('/admin')}>Go to Dashboard</Button>
+        </div>
+      </div>
+    );
+  }
+  
+  // Staff members can only access pages they have permission for
+  const isCurrentPageAccessible = isAdmin || hasPageAccess(currentPath);
+  
+  if (!isCurrentPageAccessible && currentPath !== '/admin') {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="text-center space-y-4">
           <Lock className="h-16 w-16 mx-auto text-muted-foreground" />
           <h1 className="text-2xl font-bold">Access Denied</h1>
           <p className="text-muted-foreground">You don't have permission to access this page.</p>
+          <p className="text-sm text-muted-foreground">Contact your administrator to request access.</p>
           <Button onClick={() => navigate('/admin')}>Go to Dashboard</Button>
         </div>
       </div>
