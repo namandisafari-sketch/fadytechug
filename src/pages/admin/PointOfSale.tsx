@@ -12,7 +12,7 @@ import { Search, Plus, Minus, Trash2, ShoppingCart, Printer, Barcode, ScanLine }
 import fadyLogo from '@/assets/fady-logo.png';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { formatCurrency } from '@/lib/currency';
-
+import { QRCodeSVG } from 'qrcode.react';
 interface Product {
   id: string;
   name: string;
@@ -502,9 +502,16 @@ const PointOfSale = () => {
                 )}
               </div>
 
-              <div className="text-center text-muted-foreground text-xs pt-4 border-t">
-                <p>Thank you for your purchase!</p>
-                <p>Visit us again</p>
+              <div className="flex flex-col items-center pt-4 border-t space-y-3">
+                <QRCodeSVG 
+                  value={`${window.location.origin}/admin/sales?receipt=${lastSale.receipt_number}`}
+                  size={80}
+                  level="M"
+                />
+                <div className="text-center text-muted-foreground text-xs">
+                  <p>Thank you for your purchase!</p>
+                  <p>Scan QR for receipt details</p>
+                </div>
               </div>
             </div>
           )}
