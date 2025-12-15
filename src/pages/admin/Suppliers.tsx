@@ -15,6 +15,7 @@ import { Truck, Plus, Edit, Trash2, Search, CreditCard, Receipt, Printer, Histor
 import { Switch } from '@/components/ui/switch';
 import { formatCurrency } from '@/lib/currency';
 import { format } from 'date-fns';
+import fadyLogo from '@/assets/fady-logo.png';
 
 interface Supplier {
   id: string;
@@ -674,9 +675,12 @@ const Suppliers = () => {
           {receiptData && (
             <>
               <div ref={receiptRef} className="receipt border-2 border-dashed border-border p-4 rounded-lg bg-card">
-                <div className="header text-center mb-4">
-                  <h1 className="text-lg font-bold">FADY TECHNOLOGIES</h1>
-                  <p className="text-sm text-muted-foreground">Supplier Payment Receipt</p>
+                <div className="header flex items-start gap-3 mb-4">
+                  <img src={fadyLogo} alt="Fady Technologies" className="h-12 w-auto" />
+                  <div>
+                    <h1 className="text-lg font-bold">FADY TECHNOLOGIES</h1>
+                    <p className="text-sm text-muted-foreground">Supplier Payment Receipt</p>
+                  </div>
                 </div>
                 
                 <div className="border-t border-dashed border-border my-3" />

@@ -9,6 +9,7 @@ import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { Search, Plus, Minus, Trash2, ShoppingCart, Printer, Barcode, ScanLine } from 'lucide-react';
+import fadyLogo from '@/assets/fady-logo.png';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { formatCurrency } from '@/lib/currency';
 
@@ -455,11 +456,14 @@ const PointOfSale = () => {
           </DialogHeader>
           {lastSale && (
             <div className="space-y-4 text-sm" id="receipt">
-              <div className="text-center border-b pb-4">
-                <h2 className="font-bold text-lg">FADY TECHNOLOGIES</h2>
-                <p className="text-muted-foreground">Network Equipment Store</p>
-                <p className="text-xs text-muted-foreground mt-2">Receipt #{lastSale.receipt_number}</p>
-                <p className="text-xs text-muted-foreground">{new Date(lastSale.created_at).toLocaleString()}</p>
+              <div className="flex items-start gap-3 border-b pb-4">
+                <img src={fadyLogo} alt="Fady Technologies" className="h-12 w-auto" />
+                <div>
+                  <h2 className="font-bold text-lg">FADY TECHNOLOGIES</h2>
+                  <p className="text-muted-foreground text-xs">Network Equipment Store</p>
+                  <p className="text-xs text-muted-foreground mt-1">Receipt #{lastSale.receipt_number}</p>
+                  <p className="text-xs text-muted-foreground">{new Date(lastSale.created_at).toLocaleString()}</p>
+                </div>
               </div>
 
               <div className="space-y-2">
