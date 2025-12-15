@@ -14,8 +14,9 @@ import { useAuth } from '@/hooks/useAuth';
 import { formatCurrency } from '@/lib/currency';
 import { 
   Barcode, Search, Plus, History, Package, MapPin, 
-  Calendar, Edit, Trash2, Truck, ArrowRightLeft 
+  Calendar, Edit, Trash2, Truck, ArrowRightLeft, ScanLine, Camera
 } from 'lucide-react';
+import BarcodeScanner from '@/components/BarcodeScanner';
 import { format } from 'date-fns';
 
 interface SerialUnit {
@@ -53,6 +54,7 @@ interface Product {
   id: string;
   name: string;
   sku: string | null;
+  barcode: string | null;
 }
 
 interface Supplier {
@@ -79,6 +81,10 @@ const BarcodeTracker = () => {
   const [selectedUnit, setSelectedUnit] = useState<SerialUnit | null>(null);
   const [history, setHistory] = useState<SerialUnitHistory[]>([]);
   const [transferLocation, setTransferLocation] = useState('');
+  const [scannerOpen, setScannerOpen] = useState(false);
+  const [quickAddOpen, setQuickAddOpen] = useState(false);
+  const [scannedProduct, setScannedProduct] = useState<Product | null>(null);
+  const [quantity, setQuantity] = useState(1);
   
   // Form state
   const [formData, setFormData] = useState({
@@ -112,10 +118,93 @@ const BarcodeTracker = () => {
   const fetchProducts = async () => {
     const { data, error } = await supabase
       .from('products')
-      .select('id, name, sku')
+      .select('id, name, sku, barcode')
       .order('name');
 
     if (!error) setProducts(data || []);
+  };
+
+  // Lookup product by scanned barcode
+  const handleBarcodeScan = async (code: string) => {
+    // Find product by barcode
+    const { data: product, error } = await supabase
+      .from('products')
+      .select('id, name, sku, barcode')
+      .eq('barcode', code)
+      .single();
+
+    if (error || !product) {
+      toast({ 
+        title: 'Product Not Found', 
+        description: `No product found with barcode: ${code}. You may need to add the barcode to the product first.`, 
+        variant: 'destructive' 
+      });
+      return;
+    }
+
+    // Open quick add dialog with scanned product
+    setScannedProduct(product);
+    setQuantity(1);
+    setQuickAddOpen(true);
+    toast({ title: 'Product Found', description: `${product.name} - Ready to register stock` });
+  };
+
+  // Quick add multiple units of scanned product
+  const handleQuickAddStock = async () => {
+    if (!scannedProduct || quantity < 1) return;
+
+    setLoading(true);
+    try {
+      const unitsToCreate = [];
+      for (let i = 0; i < quantity; i++) {
+        unitsToCreate.push({
+          product_id: scannedProduct.id,
+          serial_number: scannedProduct.barcode || `${scannedProduct.sku || 'UNIT'}-${Date.now()}-${i}`,
+          status: formData.status,
+          condition: formData.condition || 'new',
+          location: formData.location || null,
+          purchase_date: formData.purchase_date || null,
+          purchase_cost: formData.purchase_cost ? parseFloat(formData.purchase_cost) : null,
+          supplier_id: formData.supplier_id || null,
+          notes: `Quick added via barcode scan (${quantity} units)`
+        });
+      }
+
+      const { data, error } = await supabase
+        .from('serial_units')
+        .insert(unitsToCreate)
+        .select();
+
+      if (error) throw error;
+
+      // Log history for each unit
+      if (data) {
+        const historyEntries = data.map(unit => ({
+          serial_unit_id: unit.id,
+          action: 'created',
+          new_status: formData.status,
+          new_location: formData.location || null,
+          notes: `Stock registered via barcode scan`,
+          performed_by: user?.id
+        }));
+        await supabase.from('serial_unit_history').insert(historyEntries);
+      }
+
+      toast({ 
+        title: 'Stock Registered', 
+        description: `${quantity} unit(s) of ${scannedProduct.name} added to inventory` 
+      });
+
+      setQuickAddOpen(false);
+      setScannedProduct(null);
+      setQuantity(1);
+      resetForm();
+      fetchSerialUnits();
+    } catch (error: any) {
+      toast({ title: 'Error', description: error.message, variant: 'destructive' });
+    } finally {
+      setLoading(false);
+    }
   };
 
   const fetchSuppliers = async () => {
@@ -478,6 +567,9 @@ const BarcodeTracker = () => {
                   ))}
                 </SelectContent>
               </Select>
+              <Button variant="outline" onClick={() => setScannerOpen(true)}>
+                <ScanLine className="h-4 w-4 mr-2" />Scan
+              </Button>
               <Dialog open={dialogOpen} onOpenChange={(open) => { setDialogOpen(open); if (!open) resetForm(); }}>
                 <DialogTrigger asChild>
                   <Button><Plus className="h-4 w-4 mr-2" />Add Unit</Button>
@@ -746,6 +838,139 @@ const BarcodeTracker = () => {
                 ))}
               </div>
             )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Barcode Scanner Dialog */}
+      <BarcodeScanner 
+        open={scannerOpen} 
+        onClose={() => setScannerOpen(false)} 
+        onScan={handleBarcodeScan}
+      />
+
+      {/* Quick Add Stock Dialog */}
+      <Dialog open={quickAddOpen} onOpenChange={(open) => { setQuickAddOpen(open); if (!open) { setScannedProduct(null); setQuantity(1); } }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Package className="h-5 w-5" />
+              Quick Stock Entry
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            {scannedProduct && (
+              <div className="p-4 bg-primary/10 rounded-lg border border-primary/20">
+                <p className="font-semibold text-lg">{scannedProduct.name}</p>
+                <p className="text-sm text-muted-foreground">
+                  Barcode: <span className="font-mono">{scannedProduct.barcode}</span>
+                </p>
+                {scannedProduct.sku && (
+                  <p className="text-sm text-muted-foreground">SKU: {scannedProduct.sku}</p>
+                )}
+              </div>
+            )}
+
+            <div>
+              <Label>Quantity to Add</Label>
+              <div className="flex items-center gap-2 mt-1">
+                <Button 
+                  variant="outline" 
+                  size="icon"
+                  onClick={() => setQuantity(Math.max(1, quantity - 1))}
+                  disabled={quantity <= 1}
+                >
+                  -
+                </Button>
+                <Input
+                  type="number"
+                  value={quantity}
+                  onChange={(e) => setQuantity(Math.max(1, parseInt(e.target.value) || 1))}
+                  className="text-center text-xl font-bold w-24"
+                  min={1}
+                />
+                <Button 
+                  variant="outline" 
+                  size="icon"
+                  onClick={() => setQuantity(quantity + 1)}
+                >
+                  +
+                </Button>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label>Status</Label>
+                <Select value={formData.status} onValueChange={(v) => setFormData({...formData, status: v})}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {STATUS_OPTIONS.map(s => <SelectItem key={s} value={s}>{s.replace('_', ' ')}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label>Condition</Label>
+                <Select value={formData.condition} onValueChange={(v) => setFormData({...formData, condition: v})}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {CONDITION_OPTIONS.map(c => <SelectItem key={c} value={c}>{c.replace('_', ' ')}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div>
+              <Label>Location</Label>
+              <Select value={formData.location} onValueChange={(v) => setFormData({...formData, location: v})}>
+                <SelectTrigger><SelectValue placeholder="Select location" /></SelectTrigger>
+                <SelectContent>
+                  {LOCATION_OPTIONS.map(l => <SelectItem key={l} value={l}>{l}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div>
+              <Label>Supplier</Label>
+              <Select value={formData.supplier_id} onValueChange={(v) => setFormData({...formData, supplier_id: v})}>
+                <SelectTrigger><SelectValue placeholder="Select supplier" /></SelectTrigger>
+                <SelectContent>
+                  {suppliers.map(s => (
+                    <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label>Purchase Date</Label>
+                <Input
+                  type="date"
+                  value={formData.purchase_date}
+                  onChange={(e) => setFormData({...formData, purchase_date: e.target.value})}
+                />
+              </div>
+              <div>
+                <Label>Unit Cost (UGX)</Label>
+                <Input
+                  type="number"
+                  value={formData.purchase_cost}
+                  onChange={(e) => setFormData({...formData, purchase_cost: e.target.value})}
+                  placeholder="Cost per unit"
+                />
+              </div>
+            </div>
+
+            <Button onClick={handleQuickAddStock} disabled={loading} className="w-full" size="lg">
+              <Package className="h-4 w-4 mr-2" />
+              {loading ? 'Adding...' : `Add ${quantity} Unit${quantity > 1 ? 's' : ''} to Stock`}
+            </Button>
+
+            <Button variant="outline" onClick={() => setScannerOpen(true)} className="w-full">
+              <ScanLine className="h-4 w-4 mr-2" />
+              Scan Another Product
+            </Button>
           </div>
         </DialogContent>
       </Dialog>
