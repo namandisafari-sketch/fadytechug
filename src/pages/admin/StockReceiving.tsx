@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
-import { Package, Scan, Check, PackageCheck, AlertCircle, Truck } from 'lucide-react';
+import { Package, Scan, Check, PackageCheck, AlertCircle, Truck, Search } from 'lucide-react';
 import { formatCurrency } from '@/lib/currency';
 import BarcodeScanner from '@/components/BarcodeScanner';
 
@@ -54,7 +54,7 @@ const StockReceiving = () => {
   const [receivingItems, setReceivingItems] = useState<ReceivingItem[]>([]);
   const [scannerOpen, setScannerOpen] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [quickScanMode, setQuickScanMode] = useState(false);
+  const [manualBarcode, setManualBarcode] = useState('');
 
   useEffect(() => {
     fetchPendingOrders();
@@ -112,7 +112,19 @@ const StockReceiving = () => {
 
   const handleBarcodeScan = (barcode: string) => {
     setScannerOpen(false);
-    
+    processBarcode(barcode);
+  };
+
+  const handleManualBarcodeSubmit = () => {
+    if (!manualBarcode.trim()) {
+      toast({ title: 'Error', description: 'Please enter a barcode', variant: 'destructive' });
+      return;
+    }
+    processBarcode(manualBarcode.trim());
+    setManualBarcode('');
+  };
+
+  const processBarcode = (barcode: string) => {
     // Find item in receiving list by barcode
     const itemIndex = receivingItems.findIndex(item => item.barcode === barcode);
     
@@ -126,10 +138,6 @@ const StockReceiving = () => {
         toast({ title: 'Scanned', description: `+1 ${updated[itemIndex].product_name}` });
       } else {
         toast({ title: 'Full', description: 'All ordered units already counted', variant: 'destructive' });
-      }
-      
-      if (quickScanMode) {
-        setTimeout(() => setScannerOpen(true), 500);
       }
     } else {
       // Check if barcode belongs to any product in pending orders
@@ -265,19 +273,34 @@ const StockReceiving = () => {
           <p className="text-muted-foreground">Receive incoming shipments and update inventory</p>
         </div>
         <div className="flex gap-2">
-          <Button 
-            variant={quickScanMode ? "default" : "outline"} 
-            onClick={() => setQuickScanMode(!quickScanMode)}
-          >
+          <Button variant="outline" onClick={() => setScannerOpen(true)}>
             <Scan className="h-4 w-4 mr-2" />
-            {quickScanMode ? 'Quick Scan: ON' : 'Quick Scan: OFF'}
-          </Button>
-          <Button onClick={() => setScannerOpen(true)}>
-            <Scan className="h-4 w-4 mr-2" />
-            Scan Barcode
+            Camera Scan
           </Button>
         </div>
       </div>
+
+      {/* Manual Barcode Entry */}
+      <Card>
+        <CardContent className="py-4">
+          <div className="flex gap-3 items-end">
+            <div className="flex-1">
+              <Label className="text-base font-bold">Manual Barcode Entry</Label>
+              <Input
+                value={manualBarcode}
+                onChange={(e) => setManualBarcode(e.target.value)}
+                placeholder="Type or scan barcode here..."
+                className="h-12 text-lg"
+                onKeyDown={(e) => e.key === 'Enter' && handleManualBarcodeSubmit()}
+              />
+            </div>
+            <Button onClick={handleManualBarcodeSubmit} className="h-12 px-6">
+              <Search className="h-4 w-4 mr-2" />
+              Find
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
 
       {!selectedOrder ? (
         <>
