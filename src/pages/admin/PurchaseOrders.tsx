@@ -31,6 +31,7 @@ interface Product {
 interface PurchaseOrderItem {
   product_id: string;
   product_name: string;
+  barcode: string | null;
   quantity: number;
   unit_cost: number;
   total_cost: number;
@@ -56,7 +57,7 @@ interface POWithItems extends PurchaseOrder {
     unit_cost: number;
     total_cost: number;
     received_quantity: number | null;
-    products: { name: string };
+    products: { name: string; barcode: string | null };
   }>;
 }
 
@@ -167,6 +168,7 @@ const PurchaseOrders = () => {
     setOrderItems([...orderItems, {
       product_id: product.id,
       product_name: product.name,
+      barcode: product.barcode,
       quantity: qty,
       unit_cost: cost,
       total_cost: qty * cost
@@ -236,7 +238,7 @@ const PurchaseOrders = () => {
   const viewOrder = async (orderId: string) => {
     const { data, error } = await supabase
       .from('purchase_orders')
-      .select('*, suppliers(name), purchase_order_items(*, products(name))')
+      .select('*, suppliers(name), purchase_order_items(*, products(name, barcode))')
       .eq('id', orderId)
       .single();
 
@@ -444,6 +446,7 @@ const PurchaseOrders = () => {
                       <TableHeader>
                         <TableRow>
                           <TableHead>Product</TableHead>
+                          <TableHead>Barcode</TableHead>
                           <TableHead className="text-right">Qty</TableHead>
                           <TableHead className="text-right">Unit Cost</TableHead>
                           <TableHead className="text-right">Total</TableHead>
@@ -453,7 +456,17 @@ const PurchaseOrders = () => {
                       <TableBody>
                         {orderItems.map((item, idx) => (
                           <TableRow key={idx}>
-                            <TableCell>{item.product_name}</TableCell>
+                            <TableCell className="font-medium">{item.product_name}</TableCell>
+                            <TableCell>
+                              {item.barcode ? (
+                                <Badge variant="outline" className="font-mono text-xs">
+                                  <Barcode className="h-3 w-3 mr-1" />
+                                  {item.barcode}
+                                </Badge>
+                              ) : (
+                                <span className="text-muted-foreground text-xs">—</span>
+                              )}
+                            </TableCell>
                             <TableCell className="text-right">{item.quantity}</TableCell>
                             <TableCell className="text-right">{formatCurrency(item.unit_cost)}</TableCell>
                             <TableCell className="text-right">{formatCurrency(item.total_cost)}</TableCell>
@@ -465,7 +478,7 @@ const PurchaseOrders = () => {
                           </TableRow>
                         ))}
                         <TableRow>
-                          <TableCell colSpan={3} className="font-bold text-right">Total:</TableCell>
+                          <TableCell colSpan={4} className="font-bold text-right">Total:</TableCell>
                           <TableCell className="font-bold text-right">{formatCurrency(totalOrderItems)}</TableCell>
                           <TableCell></TableCell>
                         </TableRow>
@@ -583,6 +596,7 @@ const PurchaseOrders = () => {
                 <TableHeader>
                   <TableRow>
                     <TableHead>Product</TableHead>
+                    <TableHead>Barcode</TableHead>
                     <TableHead className="text-right">Qty</TableHead>
                     <TableHead className="text-right">Unit Cost</TableHead>
                     <TableHead className="text-right">Total</TableHead>
@@ -591,7 +605,17 @@ const PurchaseOrders = () => {
                 <TableBody>
                   {selectedOrder.purchase_order_items?.map(item => (
                     <TableRow key={item.id}>
-                      <TableCell>{item.products?.name}</TableCell>
+                      <TableCell className="font-medium">{item.products?.name}</TableCell>
+                      <TableCell>
+                        {item.products?.barcode ? (
+                          <Badge variant="outline" className="font-mono text-xs">
+                            <Barcode className="h-3 w-3 mr-1" />
+                            {item.products.barcode}
+                          </Badge>
+                        ) : (
+                          <span className="text-muted-foreground text-xs">—</span>
+                        )}
+                      </TableCell>
                       <TableCell className="text-right">{item.quantity}</TableCell>
                       <TableCell className="text-right">{formatCurrency(item.unit_cost)}</TableCell>
                       <TableCell className="text-right">{formatCurrency(item.total_cost)}</TableCell>
