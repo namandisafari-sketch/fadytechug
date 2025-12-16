@@ -1,25 +1,33 @@
 import { Home, Grid3X3, Heart, User, Settings } from "lucide-react";
-import { Link, useLocation } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/useAuth";
 
 const BottomNavigation = () => {
   const location = useLocation();
+  const navigate = useNavigate();
   const { isStaff } = useAuth();
 
   const navItems = [
     { icon: Home, label: "Home", path: "/" },
     { icon: Grid3X3, label: "Categories", path: "/#categories" },
     { icon: Heart, label: "Wishlist", path: "/#wishlist" },
-    ...(isStaff ? [{ icon: Settings, label: "Admin", path: "/admin" }] : []),
     { icon: User, label: "Account", path: "/install" },
   ];
+
+  const handleAdminClick = () => {
+    if (isStaff) {
+      navigate('/admin');
+    } else {
+      navigate('/auth');
+    }
+  };
 
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-50 bg-background border-t safe-area-bottom">
       <div className="flex items-center justify-around h-16">
         {navItems.map((item) => {
-          const isActive = location.pathname === item.path || location.pathname.startsWith(item.path + '/');
+          const isActive = location.pathname === item.path;
           return (
             <Link
               key={item.label}
@@ -34,6 +42,16 @@ const BottomNavigation = () => {
             </Link>
           );
         })}
+        <button
+          onClick={handleAdminClick}
+          className={cn(
+            "flex flex-col items-center justify-center gap-1 flex-1 h-full transition-colors",
+            location.pathname.startsWith('/admin') ? "text-primary" : "text-muted-foreground"
+          )}
+        >
+          <Settings className={cn("h-5 w-5", location.pathname.startsWith('/admin') && "text-primary")} />
+          <span className="text-xs font-medium">Admin</span>
+        </button>
       </div>
     </nav>
   );
