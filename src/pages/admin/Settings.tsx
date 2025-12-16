@@ -17,8 +17,21 @@ import {
   Edit, 
   Trash2,
   Save,
-  Users
+  Users,
+  AlertTriangle,
+  Loader2
 } from 'lucide-react';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
@@ -91,6 +104,10 @@ const Settings = () => {
   const [locationName, setLocationName] = useState('');
   const [locationDescription, setLocationDescription] = useState('');
   const [savingLocation, setSavingLocation] = useState(false);
+  
+  // Data Deletion
+  const [deletingData, setDeletingData] = useState(false);
+  const [deleteConfirmText, setDeleteConfirmText] = useState('');
 
   useEffect(() => {
     fetchSettings();
@@ -241,7 +258,7 @@ const Settings = () => {
       </div>
 
       <Tabs defaultValue="account" className="space-y-4">
-        <TabsList className="grid w-full grid-cols-4">
+        <TabsList className="grid w-full grid-cols-5">
           <TabsTrigger value="account" className="gap-2">
             <SettingsIcon className="h-4 w-4" />
             <span className="hidden sm:inline">Account</span>
@@ -258,6 +275,12 @@ const Settings = () => {
             <MapPin className="h-4 w-4" />
             <span className="hidden sm:inline">Locations</span>
           </TabsTrigger>
+          {isAdmin && (
+            <TabsTrigger value="danger" className="gap-2 text-destructive data-[state=active]:text-destructive">
+              <AlertTriangle className="h-4 w-4" />
+              <span className="hidden sm:inline">Danger</span>
+            </TabsTrigger>
+          )}
         </TabsList>
 
         {/* Account Tab */}
@@ -573,6 +596,140 @@ const Settings = () => {
             </CardContent>
           </Card>
         </TabsContent>
+
+        {/* Danger Zone Tab */}
+        {isAdmin && (
+          <TabsContent value="danger" className="space-y-4">
+            <Card className="border-destructive">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-destructive">
+                  <AlertTriangle className="h-5 w-5" />
+                  Danger Zone
+                </CardTitle>
+                <CardDescription>
+                  Irreversible actions that will permanently delete data from the system
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <div className="p-4 border border-destructive rounded-lg bg-destructive/5">
+                  <h4 className="font-semibold text-destructive mb-2">Delete All Business Data</h4>
+                  <p className="text-sm text-muted-foreground mb-4">
+                    This will permanently delete ALL data including: products, sales, customers, expenses, 
+                    suppliers, purchase orders, inventory transactions, serial units, refunds, bank deposits, 
+                    and inquiries. This action cannot be undone.
+                  </p>
+                  
+                  <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                      <Button variant="destructive">
+                        <Trash2 className="h-4 w-4 mr-2" />
+                        Delete All Data
+                      </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle className="text-destructive flex items-center gap-2">
+                          <AlertTriangle className="h-5 w-5" />
+                          Are you absolutely sure?
+                        </AlertDialogTitle>
+                        <AlertDialogDescription className="space-y-4">
+                          <p>
+                            This action <strong>cannot be undone</strong>. This will permanently delete:
+                          </p>
+                          <ul className="list-disc list-inside text-sm space-y-1">
+                            <li>All products and inventory</li>
+                            <li>All sales records and receipts</li>
+                            <li>All customers and inquiries</li>
+                            <li>All suppliers and purchase orders</li>
+                            <li>All expenses and bank deposits</li>
+                            <li>All serial units and history</li>
+                            <li>All refunds</li>
+                          </ul>
+                          <div className="pt-2">
+                            <Label className="text-foreground">
+                              Type <strong>DELETE ALL DATA</strong> to confirm:
+                            </Label>
+                            <Input 
+                              className="mt-2"
+                              value={deleteConfirmText}
+                              onChange={(e) => setDeleteConfirmText(e.target.value)}
+                              placeholder="DELETE ALL DATA"
+                            />
+                          </div>
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel onClick={() => setDeleteConfirmText('')}>
+                          Cancel
+                        </AlertDialogCancel>
+                        <AlertDialogAction
+                          disabled={deleteConfirmText !== 'DELETE ALL DATA' || deletingData}
+                          className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                          onClick={async (e) => {
+                            e.preventDefault();
+                            if (deleteConfirmText !== 'DELETE ALL DATA') return;
+                            
+                            setDeletingData(true);
+                            try {
+                              // Delete in order to respect foreign key constraints
+                              const tables = [
+                                'serial_unit_history',
+                                'serial_units',
+                                'sale_items',
+                                'refunds',
+                                'sales',
+                                'purchase_order_items',
+                                'purchase_orders',
+                                'supplier_payments',
+                                'inventory_transactions',
+                                'bank_deposits',
+                                'expenses',
+                                'inquiries',
+                                'products',
+                                'customers',
+                                'suppliers',
+                              ];
+
+                              for (const table of tables) {
+                                const { error } = await supabase.from(table as any).delete().neq('id', '00000000-0000-0000-0000-000000000000');
+                                if (error) {
+                                  console.error(`Error deleting ${table}:`, error);
+                                }
+                              }
+
+                              toast({ 
+                                title: 'Data Deleted', 
+                                description: 'All business data has been permanently deleted' 
+                              });
+                              setDeleteConfirmText('');
+                            } catch (error: any) {
+                              toast({ 
+                                title: 'Error', 
+                                description: error.message, 
+                                variant: 'destructive' 
+                              });
+                            } finally {
+                              setDeletingData(false);
+                            }
+                          }}
+                        >
+                          {deletingData ? (
+                            <>
+                              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                              Deleting...
+                            </>
+                          ) : (
+                            'Delete All Data'
+                          )}
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+        )}
       </Tabs>
 
       {/* Location Dialog */}
