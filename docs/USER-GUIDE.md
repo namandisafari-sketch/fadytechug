@@ -226,6 +226,7 @@ The dashboard provides:
 |-------|-------------|
 | Name | Product name |
 | Category | Product category |
+| **Supplier** | **Supplier (required)** |
 | Price | Selling price (UGX) |
 | Unit Cost | Your cost price |
 | Stock Quantity | Current stock |
@@ -242,6 +243,8 @@ The dashboard provides:
 | Description | Product description |
 | Is Featured | Show on homepage |
 | Is Active | Visible to customers |
+
+**Important**: All products must be assigned to a supplier. Products without a supplier cannot be saved.
 
 3. Upload product image (max 200KB)
 4. Click "Save"
@@ -316,15 +319,23 @@ For high-value items:
 
 #### Step 2: Add Received Items
 
-**Method A - Barcode Scanning**:
-1. Click barcode scanner icon
-2. Scan each product barcode
-3. Enter quantity received
+**Method A - Manual Barcode Entry**:
+1. Type the barcode number in the barcode field
+2. Click "Search" or press Enter
+3. Product is found and ready to add
+4. Enter quantity received
 
-**Method B - Manual Entry**:
-1. Search for product
-2. Enter quantity received
-3. Add to list
+**Method B - Camera Barcode Scanning**:
+1. Click the camera/scan icon next to barcode field
+2. Allow camera access
+3. Point camera at product barcode
+4. Barcode auto-fills when scanned
+5. Enter quantity received
+
+**Method C - Product Search**:
+1. Search for product by name
+2. Select from results
+3. Enter quantity received
 
 #### Step 3: Specify Details
 For each item:
@@ -477,14 +488,24 @@ When you pay a supplier:
 - Supplier info auto-fills
 
 #### Step 3: Add Items
-1. Search for product
-2. Enter quantity needed
-3. Enter unit cost
-4. Click "Add"
-5. Repeat for all items
+
+**Search by Barcode**:
+1. Enter product barcode in the barcode search field
+2. Click "Search" - product auto-fills if found
+3. Enter quantity needed
+4. Enter unit cost
+5. Click "Add Item"
+
+**Search by Name**:
+1. Type product name in the product search field
+2. Select product from dropdown
+3. Enter quantity and unit cost
+4. Click "Add Item"
+
+The items table displays product name, **barcode** (for easy verification), quantity, unit cost, and total.
 
 #### Step 4: Review & Submit
-1. Review all items
+1. Review all items (verify barcodes match physical products)
 2. Check total amount
 3. Add notes if needed
 4. Click "Create Order"
@@ -917,4 +938,8 @@ For technical support or issues with the system, contact:
 ---
 
 *Last Updated: December 2024*
-*Version: 1.0*
+*Version: 1.1*
+
+### Version History
+- **v1.1** (Dec 2024): Updated product supplier requirement, improved barcode scanning in Stock Receiving and Purchase Orders
+- **v1.0** (Dec 2024): Initial release
