@@ -8,7 +8,6 @@ import Footer from "@/components/Footer";
 import BottomNavigation from "@/components/BottomNavigation";
 import PWAHeader from "@/components/PWAHeader";
 import ProductCard from "@/components/ProductCard";
-import WelcomeDialog from "@/components/WelcomeDialog";
 import { supabase } from "@/integrations/supabase/client";
 import { formatCurrency } from "@/lib/currency";
 import { Button } from "@/components/ui/button";
@@ -66,7 +65,6 @@ const Index = () => {
   if (isStandalone) {
     return (
       <div className="min-h-screen bg-background pb-20">
-        <WelcomeDialog />
         <PWAHeader searchQuery={searchQuery} onSearchChange={setSearchQuery} />
         
         {/* Category Pills */}
@@ -131,7 +129,6 @@ const Index = () => {
   // Regular Web Mode
   return (
     <div className="min-h-screen bg-background pb-20">
-      <WelcomeDialog />
       <Navbar />
       <Hero />
       <Categories />
