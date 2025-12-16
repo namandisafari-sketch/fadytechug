@@ -130,13 +130,14 @@ const Index = () => {
 
   // Regular Web Mode
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background pb-20">
       <WelcomeDialog />
       <Navbar />
       <Hero />
       <Categories />
       <FeaturedListings />
       <Footer />
+      <BottomNavigation />
     </div>
   );
 };
