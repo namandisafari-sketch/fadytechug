@@ -8,7 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
-import { Search, Plus, Minus, Trash2, ShoppingCart, Printer, Barcode, ScanLine } from 'lucide-react';
+import { Search, Plus, Minus, Trash2, ShoppingCart, Printer, Barcode, ScanLine, Edit2 } from 'lucide-react';
 import fadyLogo from '@/assets/fady-logo.png';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { formatCurrency } from '@/lib/currency';
@@ -25,6 +25,7 @@ interface Product {
 interface CartItem {
   product: Product;
   quantity: number;
+  customPrice?: number;
 }
 
 const PointOfSale = () => {
@@ -140,7 +141,18 @@ const PointOfSale = () => {
     setCart(cart.filter(item => item.product.id !== productId));
   };
 
-  const subtotal = cart.reduce((sum, item) => sum + (item.product.price * item.quantity), 0);
+  const updateCustomPrice = (productId: string, price: string) => {
+    const numPrice = parseFloat(price);
+    setCart(cart.map(item => 
+      item.product.id === productId 
+        ? { ...item, customPrice: isNaN(numPrice) ? undefined : numPrice }
+        : item
+    ));
+  };
+
+  const getItemPrice = (item: CartItem) => item.customPrice ?? item.product.price;
+
+  const subtotal = cart.reduce((sum, item) => sum + (getItemPrice(item) * item.quantity), 0);
   const discountAmount = parseFloat(discount) || 0;
   const total = subtotal - discountAmount;
   const change = (parseFloat(amountPaid) || 0) - total;
@@ -188,8 +200,8 @@ const PointOfSale = () => {
         product_id: item.product.id,
         product_name: item.product.name,
         quantity: item.quantity,
-        unit_price: item.product.price,
-        total_price: item.product.price * item.quantity
+        unit_price: getItemPrice(item),
+        total_price: getItemPrice(item) * item.quantity
       }));
 
       const { error: itemsError } = await supabase
@@ -347,22 +359,39 @@ const PointOfSale = () => {
               ) : (
                 <div className="space-y-3 max-h-64 overflow-y-auto">
                   {cart.map(item => (
-                    <div key={item.product.id} className="flex items-center justify-between gap-2 p-2 bg-secondary/50 rounded-lg">
-                      <div className="flex-1 min-w-0">
-                        <p className="font-medium text-sm truncate">{item.product.name}</p>
-                        <p className="text-xs text-muted-foreground">{formatCurrency(item.product.price)} each</p>
+                    <div key={item.product.id} className="flex flex-col gap-2 p-2 bg-secondary/50 rounded-lg">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex-1 min-w-0">
+                          <p className="font-medium text-sm truncate">{item.product.name}</p>
+                          <p className="text-xs text-muted-foreground">
+                            Original: {formatCurrency(item.product.price)}
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => updateQuantity(item.product.id, -1)}>
+                            <Minus className="h-3 w-3" />
+                          </Button>
+                          <span className="w-8 text-center text-sm">{item.quantity}</span>
+                          <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => updateQuantity(item.product.id, 1)}>
+                            <Plus className="h-3 w-3" />
+                          </Button>
+                          <Button size="icon" variant="ghost" className="h-6 w-6 text-destructive" onClick={() => removeFromCart(item.product.id)}>
+                            <Trash2 className="h-3 w-3" />
+                          </Button>
+                        </div>
                       </div>
-                      <div className="flex items-center gap-1">
-                        <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => updateQuantity(item.product.id, -1)}>
-                          <Minus className="h-3 w-3" />
-                        </Button>
-                        <span className="w-8 text-center text-sm">{item.quantity}</span>
-                        <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => updateQuantity(item.product.id, 1)}>
-                          <Plus className="h-3 w-3" />
-                        </Button>
-                        <Button size="icon" variant="ghost" className="h-6 w-6 text-destructive" onClick={() => removeFromCart(item.product.id)}>
-                          <Trash2 className="h-3 w-3" />
-                        </Button>
+                      <div className="flex items-center gap-2">
+                        <Edit2 className="h-3 w-3 text-muted-foreground" />
+                        <Input
+                          type="number"
+                          value={item.customPrice ?? item.product.price}
+                          onChange={(e) => updateCustomPrice(item.product.id, e.target.value)}
+                          className="h-7 text-sm flex-1"
+                          placeholder="Custom price"
+                        />
+                        <span className="text-xs text-muted-foreground whitespace-nowrap">
+                          = {formatCurrency(getItemPrice(item) * item.quantity)}
+                        </span>
                       </div>
                     </div>
                   ))}
