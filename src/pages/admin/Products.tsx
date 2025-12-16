@@ -12,6 +12,7 @@ import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { Plus, Package, Edit, Trash2, Search, Upload, X, Image, Barcode, Building2, MapPin, Scale, Zap, Check, Loader2 } from 'lucide-react';
+import QuickBooksImport from '@/components/admin/QuickBooksImport';
 import { Switch } from '@/components/ui/switch';
 import { formatCurrency } from '@/lib/currency';
 import { compressImage, formatFileSize } from '@/lib/imageCompression';
@@ -390,10 +391,12 @@ const Products = () => {
           <h1 className="text-3xl font-bold text-foreground">Products</h1>
           <p className="text-muted-foreground">Manage your product catalog</p>
         </div>
-        <Dialog open={dialogOpen} onOpenChange={(open) => { setDialogOpen(open); if (!open) resetForm(); }}>
-          <DialogTrigger asChild>
-            <Button variant="outline"><Plus className="h-4 w-4 mr-2" />Full Details</Button>
-          </DialogTrigger>
+        <div className="flex items-center gap-2">
+          <QuickBooksImport onImportComplete={fetchProducts} suppliers={suppliers} />
+          <Dialog open={dialogOpen} onOpenChange={(open) => { setDialogOpen(open); if (!open) resetForm(); }}>
+            <DialogTrigger asChild>
+              <Button variant="outline"><Plus className="h-4 w-4 mr-2" />Full Details</Button>
+            </DialogTrigger>
           <DialogContent className="max-w-3xl max-h-[90vh]">
             <DialogHeader>
               <DialogTitle className="text-xl">{editingProduct ? 'Edit Product' : 'Add Product'}</DialogTitle>
@@ -550,6 +553,7 @@ const Products = () => {
             </Button>
           </DialogContent>
         </Dialog>
+        </div>
       </div>
 
       {/* QUICK ADD PRODUCT - Simple and Fast */}
