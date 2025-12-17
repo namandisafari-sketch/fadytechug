@@ -28,6 +28,13 @@ interface CartItem {
   customPrice?: number;
 }
 
+interface Customer {
+  id: string;
+  name: string;
+  phone: string | null;
+  email: string | null;
+}
+
 const PointOfSale = () => {
   const { user } = useAuth();
   const { toast } = useToast();
@@ -44,10 +51,24 @@ const PointOfSale = () => {
   const [barcodeInput, setBarcodeInput] = useState('');
   const [scannerMode, setScannerMode] = useState(false);
   const barcodeInputRef = useRef<HTMLInputElement>(null);
+  
+  // Credit sale state
+  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [selectedCustomerId, setSelectedCustomerId] = useState<string>('');
+  const [creditNotes, setCreditNotes] = useState('');
 
   useEffect(() => {
     fetchProducts();
+    fetchCustomers();
   }, []);
+
+  const fetchCustomers = async () => {
+    const { data } = await supabase
+      .from('customers')
+      .select('id, name, phone, email')
+      .order('name');
+    if (data) setCustomers(data);
+  };
 
   // Auto-focus barcode input when scanner mode is enabled
   useEffect(() => {
@@ -163,6 +184,12 @@ const PointOfSale = () => {
       return;
     }
 
+    // For credit sales, customer must be selected
+    if (paymentMethod === 'credit' && !selectedCustomerId) {
+      toast({ title: 'Error', description: 'Please select a customer for credit sale', variant: 'destructive' });
+      return;
+    }
+
     if (paymentMethod === 'cash' && change < 0) {
       toast({ title: 'Error', description: 'Insufficient payment', variant: 'destructive' });
       return;
@@ -175,19 +202,24 @@ const PointOfSale = () => {
       const { data: receiptData } = await supabase.rpc('generate_receipt_number');
       const receiptNumber = receiptData || `RCP-${Date.now()}`;
 
+      const selectedCustomer = customers.find(c => c.id === selectedCustomerId);
+      const actualAmountPaid = paymentMethod === 'credit' ? (parseFloat(amountPaid) || 0) : (parseFloat(amountPaid) || total);
+
       // Create sale record
       const { data: sale, error: saleError } = await supabase
         .from('sales')
         .insert({
           receipt_number: receiptNumber,
-          customer_name: customerName || 'Walk-in Customer',
+          customer_id: selectedCustomerId || null,
+          customer_name: selectedCustomer?.name || customerName || 'Walk-in Customer',
           subtotal,
           discount: discountAmount,
           total,
           payment_method: paymentMethod as any,
-          amount_paid: parseFloat(amountPaid) || total,
-          change_given: Math.max(0, change),
-          sold_by: user?.id
+          amount_paid: actualAmountPaid,
+          change_given: paymentMethod === 'cash' ? Math.max(0, change) : 0,
+          sold_by: user?.id,
+          notes: paymentMethod === 'credit' ? `Credit Sale - ${creditNotes}` : null
         })
         .select()
         .single();
@@ -209,6 +241,43 @@ const PointOfSale = () => {
         .insert(saleItems);
 
       if (itemsError) throw itemsError;
+
+      // If credit sale, create credit_sales record
+      if (paymentMethod === 'credit' && selectedCustomerId) {
+        const balance = total - actualAmountPaid;
+        const { error: creditError } = await supabase
+          .from('credit_sales')
+          .insert({
+            sale_id: sale.id,
+            customer_id: selectedCustomerId,
+            total_amount: total,
+            amount_paid: actualAmountPaid,
+            balance: balance,
+            status: balance <= 0 ? 'paid' : actualAmountPaid > 0 ? 'partial' : 'pending',
+            notes: creditNotes || null
+          });
+
+        if (creditError) throw creditError;
+
+        // Record initial payment if any
+        if (actualAmountPaid > 0) {
+          const { data: creditSale } = await supabase
+            .from('credit_sales')
+            .select('id')
+            .eq('sale_id', sale.id)
+            .single();
+
+          if (creditSale) {
+            await supabase.from('credit_payments').insert({
+              credit_sale_id: creditSale.id,
+              amount: actualAmountPaid,
+              payment_method: 'cash',
+              received_by: user?.id,
+              notes: 'Initial deposit'
+            });
+          }
+        }
+      }
 
       // Update stock and create inventory transactions
       for (const item of cart) {
@@ -232,7 +301,7 @@ const PointOfSale = () => {
           });
       }
 
-      setLastSale({ ...sale, items: cart });
+      setLastSale({ ...sale, items: cart, isCredit: paymentMethod === 'credit' });
       setShowReceipt(true);
       
       // Reset
@@ -240,9 +309,11 @@ const PointOfSale = () => {
       setAmountPaid('');
       setCustomerName('');
       setDiscount('0');
+      setSelectedCustomerId('');
+      setCreditNotes('');
       fetchProducts();
 
-      toast({ title: 'Success', description: 'Sale completed successfully' });
+      toast({ title: 'Success', description: paymentMethod === 'credit' ? 'Credit sale recorded successfully' : 'Sale completed successfully' });
 
     } catch (error: any) {
       toast({ title: 'Error', description: error.message, variant: 'destructive' });
@@ -439,9 +510,50 @@ const PointOfSale = () => {
                       <SelectItem value="card">Card</SelectItem>
                       <SelectItem value="mobile_money">Mobile Money</SelectItem>
                       <SelectItem value="bank_transfer">Bank Transfer</SelectItem>
+                      <SelectItem value="credit">Credit (Installments)</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
+
+                {paymentMethod === 'credit' && (
+                  <div className="space-y-3 p-3 bg-orange-500/10 border border-orange-500/30 rounded-lg">
+                    <div>
+                      <Label className="text-orange-600">Select Customer *</Label>
+                      <Select value={selectedCustomerId} onValueChange={setSelectedCustomerId}>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select customer..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {customers.map(c => (
+                            <SelectItem key={c.id} value={c.id}>
+                              {c.name} {c.phone && `(${c.phone})`}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <Label>Initial Deposit (UGX)</Label>
+                      <Input 
+                        type="number"
+                        value={amountPaid} 
+                        onChange={(e) => setAmountPaid(e.target.value)}
+                        placeholder="0 (optional)"
+                      />
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Balance: {formatCurrency(total - (parseFloat(amountPaid) || 0))}
+                      </p>
+                    </div>
+                    <div>
+                      <Label>Notes</Label>
+                      <Input 
+                        value={creditNotes} 
+                        onChange={(e) => setCreditNotes(e.target.value)}
+                        placeholder="Payment terms, etc."
+                      />
+                    </div>
+                  </div>
+                )}
 
                 {paymentMethod === 'cash' && (
                   <div>

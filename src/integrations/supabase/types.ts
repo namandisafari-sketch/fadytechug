@@ -95,6 +95,104 @@ export type Database = {
         }
         Relationships: []
       }
+      credit_payments: {
+        Row: {
+          amount: number
+          created_at: string
+          credit_sale_id: string
+          id: string
+          notes: string | null
+          payment_date: string
+          payment_method: string
+          received_by: string | null
+        }
+        Insert: {
+          amount: number
+          created_at?: string
+          credit_sale_id: string
+          id?: string
+          notes?: string | null
+          payment_date?: string
+          payment_method?: string
+          received_by?: string | null
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          credit_sale_id?: string
+          id?: string
+          notes?: string | null
+          payment_date?: string
+          payment_method?: string
+          received_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "credit_payments_credit_sale_id_fkey"
+            columns: ["credit_sale_id"]
+            isOneToOne: false
+            referencedRelation: "credit_sales"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      credit_sales: {
+        Row: {
+          amount_paid: number
+          balance: number
+          created_at: string
+          customer_id: string
+          due_date: string | null
+          id: string
+          notes: string | null
+          sale_id: string
+          status: string
+          total_amount: number
+          updated_at: string
+        }
+        Insert: {
+          amount_paid?: number
+          balance: number
+          created_at?: string
+          customer_id: string
+          due_date?: string | null
+          id?: string
+          notes?: string | null
+          sale_id: string
+          status?: string
+          total_amount: number
+          updated_at?: string
+        }
+        Update: {
+          amount_paid?: number
+          balance?: number
+          created_at?: string
+          customer_id?: string
+          due_date?: string | null
+          id?: string
+          notes?: string | null
+          sale_id?: string
+          status?: string
+          total_amount?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "credit_sales_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "credit_sales_sale_id_fkey"
+            columns: ["sale_id"]
+            isOneToOne: false
+            referencedRelation: "sales"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       customers: {
         Row: {
           company: string | null
@@ -825,6 +923,47 @@ export type Database = {
           value?: Json
         }
         Relationships: []
+      }
+      stock_transfers: {
+        Row: {
+          created_at: string
+          from_location: string
+          id: string
+          notes: string | null
+          product_id: string
+          quantity: number
+          to_location: string
+          transferred_by: string | null
+        }
+        Insert: {
+          created_at?: string
+          from_location: string
+          id?: string
+          notes?: string | null
+          product_id: string
+          quantity: number
+          to_location: string
+          transferred_by?: string | null
+        }
+        Update: {
+          created_at?: string
+          from_location?: string
+          id?: string
+          notes?: string | null
+          product_id?: string
+          quantity?: number
+          to_location?: string
+          transferred_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "stock_transfers_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       storage_locations: {
         Row: {
