@@ -15,7 +15,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { 
   ClipboardList, RefreshCw, AlertTriangle, Search, Package, 
   MapPin, Barcode, TrendingDown, TrendingUp, Filter, Download,
-  Box, Warehouse, History, Settings, Plus, Minus, Check, Zap
+  Box, Warehouse, History, Settings, Plus, Minus, Check, Zap, ArrowRightLeft
 } from 'lucide-react';
 import { Textarea } from '@/components/ui/textarea';
 import { formatCurrency } from '@/lib/currency';
@@ -99,6 +99,15 @@ const Inventory = () => {
   // Settings
   const [lowStockThreshold, setLowStockThreshold] = useState(5);
   const [reorderThreshold, setReorderThreshold] = useState(10);
+  
+  // Stock transfer state
+  const [transferDialogOpen, setTransferDialogOpen] = useState(false);
+  const [transferProduct, setTransferProduct] = useState<Product | null>(null);
+  const [transferFromLocation, setTransferFromLocation] = useState('');
+  const [transferToLocation, setTransferToLocation] = useState('');
+  const [transferQuantity, setTransferQuantity] = useState('');
+  const [transferNotes, setTransferNotes] = useState('');
+  const [transferLoading, setTransferLoading] = useState(false);
 
   useEffect(() => {
     fetchProducts();
@@ -315,6 +324,83 @@ const Inventory = () => {
     a.click();
   };
 
+  const openTransferDialog = (product: Product) => {
+    setTransferProduct(product);
+    setTransferFromLocation(product.location || '');
+    setTransferToLocation('');
+    setTransferQuantity('1');
+    setTransferNotes('');
+    setTransferDialogOpen(true);
+  };
+
+  const handleStockTransfer = async () => {
+    if (!transferProduct || !transferToLocation || !transferQuantity) {
+      toast({ title: 'Error', description: 'Please fill all required fields', variant: 'destructive' });
+      return;
+    }
+
+    const qty = parseInt(transferQuantity);
+    if (qty <= 0 || qty > transferProduct.stock_quantity) {
+      toast({ title: 'Error', description: 'Invalid quantity', variant: 'destructive' });
+      return;
+    }
+
+    if (transferFromLocation === transferToLocation) {
+      toast({ title: 'Error', description: 'From and To locations must be different', variant: 'destructive' });
+      return;
+    }
+
+    setTransferLoading(true);
+
+    try {
+      // Record the transfer
+      await supabase.from('stock_transfers').insert({
+        product_id: transferProduct.id,
+        from_location: transferFromLocation || 'Unassigned',
+        to_location: transferToLocation,
+        quantity: qty,
+        transferred_by: user?.id,
+        notes: transferNotes || null
+      });
+
+      // Update product location if transferring all stock
+      const updateData: any = { location: transferToLocation };
+      
+      // Auto-activate if transferring to store/shop location
+      const isStoreLocation = transferToLocation.toLowerCase().includes('store') || 
+                              transferToLocation.toLowerCase().includes('shop');
+      if (isStoreLocation) {
+        updateData.is_active = true;
+      }
+
+      await supabase
+        .from('products')
+        .update(updateData)
+        .eq('id', transferProduct.id);
+
+      // Create inventory transaction for tracking
+      await supabase.from('inventory_transactions').insert({
+        product_id: transferProduct.id,
+        transaction_type: 'adjustment',
+        quantity: 0,
+        previous_stock: transferProduct.stock_quantity,
+        new_stock: transferProduct.stock_quantity,
+        notes: `Transfer: ${qty} units from ${transferFromLocation || 'Unassigned'} to ${transferToLocation}`,
+        created_by: user?.id
+      });
+
+      toast({ title: 'Success', description: `Transferred ${qty} units to ${transferToLocation}` });
+      setTransferDialogOpen(false);
+      fetchProducts();
+      fetchTransactions();
+
+    } catch (error: any) {
+      toast({ title: 'Error', description: error.message, variant: 'destructive' });
+    } finally {
+      setTransferLoading(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -451,6 +537,71 @@ const Inventory = () => {
                   {loading ? 'Processing...' : 'Submit Adjustment'}
                 </Button>
               </div>
+            </DialogContent>
+          </Dialog>
+          
+          {/* Stock Transfer Dialog */}
+          <Dialog open={transferDialogOpen} onOpenChange={setTransferDialogOpen}>
+            <DialogContent className="max-w-md">
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2">
+                  <ArrowRightLeft className="h-5 w-5" />
+                  Transfer Stock
+                </DialogTitle>
+              </DialogHeader>
+              {transferProduct && (
+                <div className="space-y-4">
+                  <div className="p-3 bg-secondary/50 rounded-lg">
+                    <p className="font-medium">{transferProduct.name}</p>
+                    <p className="text-sm text-muted-foreground">Current Stock: {transferProduct.stock_quantity}</p>
+                  </div>
+                  
+                  <div>
+                    <Label>From Location</Label>
+                    <Select value={transferFromLocation || "unassigned"} onValueChange={(v) => setTransferFromLocation(v === "unassigned" ? "" : v)}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="unassigned">Unassigned</SelectItem>
+                        {locations.map(loc => <SelectItem key={loc.id} value={loc.name}>{loc.name}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  
+                  <div>
+                    <Label>To Location *</Label>
+                    <Select value={transferToLocation} onValueChange={setTransferToLocation}>
+                      <SelectTrigger><SelectValue placeholder="Select destination..." /></SelectTrigger>
+                      <SelectContent>
+                        {locations.map(loc => <SelectItem key={loc.id} value={loc.name}>{loc.name}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  
+                  <div>
+                    <Label>Quantity *</Label>
+                    <Input 
+                      type="number"
+                      value={transferQuantity}
+                      onChange={(e) => setTransferQuantity(e.target.value)}
+                      min={1}
+                      max={transferProduct.stock_quantity}
+                    />
+                  </div>
+                  
+                  <div>
+                    <Label>Notes</Label>
+                    <Input 
+                      value={transferNotes}
+                      onChange={(e) => setTransferNotes(e.target.value)}
+                      placeholder="Reason for transfer..."
+                    />
+                  </div>
+                  
+                  <Button onClick={handleStockTransfer} disabled={transferLoading} className="w-full">
+                    {transferLoading ? 'Transferring...' : 'Transfer Stock'}
+                  </Button>
+                </div>
+              )}
             </DialogContent>
           </Dialog>
         </div>
@@ -767,6 +918,7 @@ const Inventory = () => {
                       <TableHead className="text-right">Unit Cost</TableHead>
                       <TableHead className="text-right">Stock Value</TableHead>
                       <TableHead>Status</TableHead>
+                      <TableHead>Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -837,12 +989,24 @@ const Inventory = () => {
                               {isOut ? 'Out of Stock' : isLow ? 'Low' : needsReorder ? 'Reorder' : 'Good'}
                             </Badge>
                           </TableCell>
+                          <TableCell>
+                            <Button 
+                              variant="outline" 
+                              size="sm"
+                              onClick={() => openTransferDialog(product)}
+                              disabled={product.stock_quantity === 0}
+                              className="gap-1"
+                            >
+                              <ArrowRightLeft className="h-3 w-3" />
+                              Transfer
+                            </Button>
+                          </TableCell>
                         </TableRow>
                       );
                     })}
                     {filteredProducts.length === 0 && (
                       <TableRow>
-                        <TableCell colSpan={10} className="text-center text-muted-foreground py-8">
+                        <TableCell colSpan={11} className="text-center text-muted-foreground py-8">
                           No products found
                         </TableCell>
                       </TableRow>
