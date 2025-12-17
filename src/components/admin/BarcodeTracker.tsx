@@ -64,7 +64,12 @@ interface Supplier {
 
 const STATUS_OPTIONS = ['in_stock', 'sold', 'reserved', 'in_repair', 'returned', 'damaged', 'lost'];
 const CONDITION_OPTIONS = ['new', 'refurbished', 'open_box', 'used_like_new', 'used_good', 'damaged'];
-const LOCATION_OPTIONS = ['Warehouse A', 'Warehouse B', 'Store Front', 'Service Center', 'Returns'];
+
+interface StorageLocation {
+  id: string;
+  name: string;
+  is_active: boolean;
+}
 
 const BarcodeTracker = () => {
   const { user } = useAuth();
@@ -72,6 +77,7 @@ const BarcodeTracker = () => {
   const [serialUnits, setSerialUnits] = useState<SerialUnit[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
+  const [locations, setLocations] = useState<StorageLocation[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [loading, setLoading] = useState(false);
@@ -103,8 +109,18 @@ const BarcodeTracker = () => {
     fetchSerialUnits();
     fetchProducts();
     fetchSuppliers();
+    fetchLocations();
     cleanupOldSoldUnits();
   }, []);
+
+  const fetchLocations = async () => {
+    const { data } = await supabase
+      .from('storage_locations')
+      .select('*')
+      .eq('is_active', true)
+      .order('name');
+    if (data) setLocations(data);
+  };
 
   const fetchSerialUnits = async () => {
     const { data, error } = await supabase
@@ -397,8 +413,10 @@ const BarcodeTracker = () => {
         performed_by: user?.id
       });
 
-      // Auto-show product when transferred to Store Front
-      if (transferLocation === 'Store Front') {
+      // Auto-show product when transferred to Store/Shop location
+      const isStoreLocation = transferLocation.toLowerCase().includes('store') || 
+                              transferLocation.toLowerCase().includes('shop');
+      if (isStoreLocation) {
         await supabase
           .from('products')
           .update({ is_active: true })
@@ -628,7 +646,7 @@ const BarcodeTracker = () => {
                       <Select value={formData.location} onValueChange={(v) => setFormData({...formData, location: v})}>
                         <SelectTrigger><SelectValue placeholder="Select location" /></SelectTrigger>
                         <SelectContent>
-                          {LOCATION_OPTIONS.map(l => <SelectItem key={l} value={l}>{l}</SelectItem>)}
+                          {locations.map(l => <SelectItem key={l.id} value={l.name}>{l.name}</SelectItem>)}
                         </SelectContent>
                       </Select>
                     </div>
@@ -780,9 +798,9 @@ const BarcodeTracker = () => {
                   <SelectValue placeholder="Select destination" />
                 </SelectTrigger>
                 <SelectContent>
-                  {LOCATION_OPTIONS.map(loc => (
-                    <SelectItem key={loc} value={loc} disabled={loc === selectedUnit?.location}>
-                      {loc} {loc === selectedUnit?.location && '(current)'}
+                  {locations.map(loc => (
+                    <SelectItem key={loc.id} value={loc.name} disabled={loc.name === selectedUnit?.location}>
+                      {loc.name} {loc.name === selectedUnit?.location && '(current)'}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -925,7 +943,7 @@ const BarcodeTracker = () => {
               <Select value={formData.location} onValueChange={(v) => setFormData({...formData, location: v})}>
                 <SelectTrigger><SelectValue placeholder="Select location" /></SelectTrigger>
                 <SelectContent>
-                  {LOCATION_OPTIONS.map(l => <SelectItem key={l} value={l}>{l}</SelectItem>)}
+                  {locations.map(l => <SelectItem key={l.id} value={l.name}>{l.name}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>

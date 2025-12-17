@@ -46,6 +46,12 @@ interface ReceivingItem {
   condition: string;
 }
 
+interface StorageLocation {
+  id: string;
+  name: string;
+  is_active: boolean;
+}
+
 const StockReceiving = () => {
   const { user } = useAuth();
   const { toast } = useToast();
@@ -55,10 +61,21 @@ const StockReceiving = () => {
   const [scannerOpen, setScannerOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [manualBarcode, setManualBarcode] = useState('');
+  const [locations, setLocations] = useState<StorageLocation[]>([]);
 
   useEffect(() => {
     fetchPendingOrders();
+    fetchLocations();
   }, []);
+
+  const fetchLocations = async () => {
+    const { data } = await supabase
+      .from('storage_locations')
+      .select('*')
+      .eq('is_active', true)
+      .order('name');
+    if (data) setLocations(data);
+  };
 
   const fetchPendingOrders = async () => {
     const { data, error } = await supabase
@@ -96,6 +113,8 @@ const StockReceiving = () => {
 
   const selectOrder = (order: PendingOrder) => {
     setSelectedOrder(order);
+    // Use first available location as default, or empty string if none
+    const defaultLocation = locations.length > 0 ? locations[0].name : '';
     setReceivingItems(order.items.map(item => ({
       item_id: item.id,
       product_id: item.product_id,
@@ -105,7 +124,7 @@ const StockReceiving = () => {
       received_qty: item.received_quantity,
       receiving_now: item.quantity - item.received_quantity,
       unit_cost: item.unit_cost,
-      location: 'Main Warehouse',
+      location: defaultLocation,
       condition: 'new'
     })));
   };
@@ -197,6 +216,10 @@ const StockReceiving = () => {
 
         const newStock = product.stock_quantity + item.receiving_now;
 
+        // Auto-activate product when stored in Store/Shop location
+        const isStoreLocation = item.location.toLowerCase().includes('store') || 
+                                item.location.toLowerCase().includes('shop');
+        
         // Update product stock
         await supabase
           .from('products')
@@ -204,7 +227,7 @@ const StockReceiving = () => {
             stock_quantity: newStock,
             location: item.location,
             condition: item.condition,
-            is_active: item.location === 'Store Front' ? true : undefined
+            is_active: isStoreLocation ? true : undefined
           })
           .eq('id', item.product_id);
 
@@ -445,9 +468,9 @@ const StockReceiving = () => {
                               <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
-                              <SelectItem value="Main Warehouse">Main Warehouse</SelectItem>
-                              <SelectItem value="Store Front">Store Front</SelectItem>
-                              <SelectItem value="Back Room">Back Room</SelectItem>
+                              {locations.map(loc => (
+                                <SelectItem key={loc.id} value={loc.name}>{loc.name}</SelectItem>
+                              ))}
                             </SelectContent>
                           </Select>
                         </TableCell>

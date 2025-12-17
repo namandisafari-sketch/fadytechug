@@ -58,14 +58,20 @@ interface InventoryTransaction {
 }
 
 const CATEGORIES = ['Routers', 'Switches', 'Cables', 'Servers', 'Accessories', 'Networking', 'Other'];
-const LOCATIONS = ['Warehouse A', 'Warehouse B', 'Store Front', 'Service Center', 'Returns'];
 const CONDITIONS = ['New', 'Refurbished', 'Open Box', 'Used - Like New', 'Used - Good', 'Damaged'];
+
+interface StorageLocation {
+  id: string;
+  name: string;
+  is_active: boolean;
+}
 
 const Inventory = () => {
   const { user } = useAuth();
   const { toast } = useToast();
   const [products, setProducts] = useState<Product[]>([]);
   const [transactions, setTransactions] = useState<InventoryTransaction[]>([]);
+  const [locations, setLocations] = useState<StorageLocation[]>([]);
   const [selectedProduct, setSelectedProduct] = useState<string>('');
   const [adjustmentType, setAdjustmentType] = useState<string>('adjustment');
   const [quantity, setQuantity] = useState('');
@@ -97,7 +103,17 @@ const Inventory = () => {
   useEffect(() => {
     fetchProducts();
     fetchTransactions();
+    fetchLocations();
   }, []);
+
+  const fetchLocations = async () => {
+    const { data } = await supabase
+      .from('storage_locations')
+      .select('*')
+      .eq('is_active', true)
+      .order('name');
+    if (data) setLocations(data);
+  };
 
   const fetchProducts = async () => {
     const { data, error } = await supabase
@@ -396,7 +412,7 @@ const Inventory = () => {
                       <SelectTrigger><SelectValue placeholder="Select location" /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="none">Not specified</SelectItem>
-                        {LOCATIONS.map(loc => <SelectItem key={loc} value={loc}>{loc}</SelectItem>)}
+                        {locations.map(loc => <SelectItem key={loc.id} value={loc.name}>{loc.name}</SelectItem>)}
                       </SelectContent>
                     </Select>
                   </div>
@@ -948,9 +964,9 @@ const Inventory = () => {
               <div className="p-4 bg-muted rounded-lg">
                 <h4 className="font-medium mb-2">Storage Locations</h4>
                 <div className="flex flex-wrap gap-2">
-                  {LOCATIONS.map(loc => (
-                    <Badge key={loc} variant="outline">
-                      <MapPin className="h-3 w-3 mr-1" />{loc}
+                  {locations.map(loc => (
+                    <Badge key={loc.id} variant="outline">
+                      <MapPin className="h-3 w-3 mr-1" />{loc.name}
                     </Badge>
                   ))}
                 </div>

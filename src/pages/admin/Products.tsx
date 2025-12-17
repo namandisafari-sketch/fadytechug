@@ -19,13 +19,18 @@ import { compressImage, formatFileSize } from '@/lib/imageCompression';
 
 
 const CATEGORIES = ['Routers', 'Switches', 'Cables', 'Servers', 'Accessories', 'Networking', 'Other'];
-const LOCATIONS = ['Warehouse A', 'Warehouse B', 'Store Front', 'Service Center', 'Returns'];
 const CONDITIONS = ['new', 'refurbished', 'open_box', 'used_like_new', 'used_good', 'damaged'];
 const MAX_FILE_SIZE = 200 * 1024; // 200KB
 
 interface Supplier {
   id: string;
   name: string;
+}
+
+interface StorageLocation {
+  id: string;
+  name: string;
+  is_active: boolean;
 }
 
 interface Product {
@@ -59,6 +64,7 @@ const Products = () => {
   const quickNameRef = useRef<HTMLInputElement>(null);
   const [products, setProducts] = useState<Product[]>([]);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
+  const [locations, setLocations] = useState<StorageLocation[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
@@ -98,7 +104,17 @@ const Products = () => {
   useEffect(() => {
     fetchProducts();
     fetchSuppliers();
+    fetchLocations();
   }, []);
+
+  const fetchLocations = async () => {
+    const { data } = await supabase
+      .from('storage_locations')
+      .select('*')
+      .eq('is_active', true)
+      .order('name');
+    if (data) setLocations(data);
+  };
 
   const fetchSuppliers = async () => {
     const { data, error } = await supabase
@@ -497,7 +513,7 @@ const Products = () => {
                     <SelectTrigger><SelectValue placeholder="Where?" /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="none">Not set</SelectItem>
-                      {LOCATIONS.map(loc => <SelectItem key={loc} value={loc}>{loc}</SelectItem>)}
+                      {locations.map(loc => <SelectItem key={loc.id} value={loc.name}>{loc.name}</SelectItem>)}
                     </SelectContent>
                   </Select>
                 </div>
