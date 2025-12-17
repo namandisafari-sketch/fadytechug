@@ -12,8 +12,9 @@ This guide provides complete instructions for self-hosting Supabase on your own 
 6. [Nginx Reverse Proxy](#nginx-reverse-proxy)
 7. [SSL Certificates](#ssl-certificates)
 8. [Connecting Your App](#connecting-your-app)
-9. [Backup & Maintenance](#backup--maintenance)
-10. [Troubleshooting](#troubleshooting)
+9. [Migrating from Lovable Cloud](#migrating-from-lovable-cloud)
+10. [Backup & Maintenance](#backup--maintenance)
+11. [Troubleshooting](#troubleshooting)
 
 ---
 
@@ -521,6 +522,368 @@ supabase login
 
 # Deploy functions to self-hosted instance
 supabase functions deploy --project-ref self-hosted
+```
+
+---
+
+## Migrating from Lovable Cloud
+
+This section covers how to migrate your existing data from Lovable Cloud (Supabase-hosted) to your self-hosted Supabase instance.
+
+### Migration Overview
+
+The migration process involves:
+1. Exporting data from Lovable Cloud using the Data Backup feature
+2. Exporting the database schema
+3. Setting up the schema on your self-hosted instance
+4. Importing the data
+5. Migrating storage files (if applicable)
+6. Updating your application configuration
+
+### Method 1: Using the Data Backup Feature (Recommended)
+
+The Fady Technologies app includes a built-in Data Backup feature that exports all business data as JSON.
+
+#### Step 1: Export Data from Lovable Cloud
+
+1. Log in to your admin panel at your Lovable Cloud URL
+2. Navigate to **Settings** → **Data Backup**
+3. Select all tables you want to migrate
+4. Click **Create Backup** and download the JSON file
+
+#### Step 2: Create Import Script
+
+Create this script on your server to import the JSON backup:
+
+```bash
+nano /opt/supabase/import-backup.js
+```
+
+```javascript
+// /opt/supabase/import-backup.js
+const { createClient } = require('@supabase/supabase-js');
+const fs = require('fs');
+
+// Self-hosted Supabase configuration
+const SUPABASE_URL = 'https://db.yourdomain.com';
+const SUPABASE_SERVICE_KEY = 'your-service-role-key'; // Use service role for admin access
+
+const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
+
+// Table import order (respects foreign key dependencies)
+const TABLE_ORDER = [
+  'storage_locations',
+  'suppliers',
+  'customers',
+  'products',
+  'sales',
+  'sale_items',
+  'refunds',
+  'expenses',
+  'bank_deposits',
+  'cash_register',
+  'inquiries',
+  'purchase_orders',
+  'purchase_order_items',
+  'supplier_payments',
+  'inventory_transactions',
+  'serial_units',
+  'serial_unit_history',
+  'credit_sales',
+  'credit_payments',
+  'stock_transfers',
+  'site_settings'
+];
+
+async function importBackup(backupFile) {
+  console.log('Reading backup file...');
+  const backup = JSON.parse(fs.readFileSync(backupFile, 'utf8'));
+  
+  console.log(`Backup contains ${Object.keys(backup.tables).length} tables`);
+  console.log(`Created at: ${backup.metadata.created_at}`);
+  
+  for (const tableName of TABLE_ORDER) {
+    if (backup.tables[tableName] && backup.tables[tableName].length > 0) {
+      console.log(`\nImporting ${tableName}: ${backup.tables[tableName].length} records`);
+      
+      // Import in batches of 100
+      const records = backup.tables[tableName];
+      const batchSize = 100;
+      
+      for (let i = 0; i < records.length; i += batchSize) {
+        const batch = records.slice(i, i + batchSize);
+        
+        const { error } = await supabase
+          .from(tableName)
+          .upsert(batch, { onConflict: 'id' });
+        
+        if (error) {
+          console.error(`Error importing ${tableName}:`, error.message);
+        } else {
+          console.log(`  Imported ${Math.min(i + batchSize, records.length)}/${records.length}`);
+        }
+      }
+    }
+  }
+  
+  console.log('\n✅ Import completed!');
+}
+
+// Run import
+const backupFile = process.argv[2] || 'backup.json';
+importBackup(backupFile).catch(console.error);
+```
+
+#### Step 3: Run the Import
+
+```bash
+# Install dependencies
+cd /opt/supabase
+npm init -y
+npm install @supabase/supabase-js
+
+# Upload your backup file to the server
+scp fady-technologies-backup-*.json user@your-server:/opt/supabase/backup.json
+
+# Run the import
+node import-backup.js backup.json
+```
+
+### Method 2: Direct Database Migration (Advanced)
+
+For a complete database migration including schema and data:
+
+#### Step 1: Get Lovable Cloud Database Credentials
+
+You'll need the database connection string from Lovable Cloud. This is available in your project's Supabase dashboard.
+
+#### Step 2: Export Schema and Data
+
+```bash
+# Export schema only
+pg_dump "postgresql://postgres:[PASSWORD]@db.[PROJECT_REF].supabase.co:5432/postgres" \
+  --schema=public \
+  --schema-only \
+  --no-owner \
+  --no-privileges \
+  > schema.sql
+
+# Export data only
+pg_dump "postgresql://postgres:[PASSWORD]@db.[PROJECT_REF].supabase.co:5432/postgres" \
+  --schema=public \
+  --data-only \
+  --no-owner \
+  --no-privileges \
+  > data.sql
+```
+
+#### Step 3: Import to Self-Hosted Instance
+
+```bash
+# Import schema (run first)
+docker exec -i supabase-db psql -U postgres -d postgres < schema.sql
+
+# Import data
+docker exec -i supabase-db psql -U postgres -d postgres < data.sql
+```
+
+### Method 3: Table-by-Table Export (Using SQL)
+
+For selective migration of specific tables:
+
+#### Step 1: Export Tables as CSV from Lovable Cloud
+
+Use the Supabase SQL editor or a PostgreSQL client:
+
+```sql
+-- Export each table to CSV
+COPY (SELECT * FROM products) TO STDOUT WITH CSV HEADER;
+COPY (SELECT * FROM customers) TO STDOUT WITH CSV HEADER;
+COPY (SELECT * FROM sales) TO STDOUT WITH CSV HEADER;
+-- ... repeat for each table
+```
+
+#### Step 2: Import CSV to Self-Hosted
+
+```bash
+# Copy CSV files to server
+scp *.csv user@your-server:/opt/supabase/data/
+
+# Import each table
+docker exec -i supabase-db psql -U postgres -d postgres -c "\COPY products FROM '/data/products.csv' WITH CSV HEADER"
+docker exec -i supabase-db psql -U postgres -d postgres -c "\COPY customers FROM '/data/customers.csv' WITH CSV HEADER"
+# ... repeat for each table
+```
+
+### Migrating Storage Files
+
+If you have files stored in Supabase Storage (product images, receipts, etc.):
+
+#### Step 1: List and Download Files from Lovable Cloud
+
+```javascript
+// download-storage.js
+const { createClient } = require('@supabase/supabase-js');
+const fs = require('fs');
+const path = require('path');
+
+// Lovable Cloud credentials
+const SOURCE_URL = 'https://reabedrvlwatpiyxfqun.supabase.co';
+const SOURCE_KEY = 'your-lovable-cloud-anon-key';
+
+const supabase = createClient(SOURCE_URL, SOURCE_KEY);
+
+async function downloadBucket(bucketName, outputDir) {
+  console.log(`Downloading bucket: ${bucketName}`);
+  
+  const { data: files, error } = await supabase.storage
+    .from(bucketName)
+    .list('', { limit: 1000 });
+  
+  if (error) {
+    console.error('Error listing files:', error);
+    return;
+  }
+  
+  fs.mkdirSync(outputDir, { recursive: true });
+  
+  for (const file of files) {
+    if (file.name) {
+      console.log(`  Downloading: ${file.name}`);
+      
+      const { data, error: downloadError } = await supabase.storage
+        .from(bucketName)
+        .download(file.name);
+      
+      if (!downloadError && data) {
+        const buffer = Buffer.from(await data.arrayBuffer());
+        fs.writeFileSync(path.join(outputDir, file.name), buffer);
+      }
+    }
+  }
+  
+  console.log(`✅ Downloaded ${files.length} files from ${bucketName}`);
+}
+
+// Download product-images bucket
+downloadBucket('product-images', './storage-backup/product-images');
+```
+
+#### Step 2: Upload to Self-Hosted Storage
+
+```javascript
+// upload-storage.js
+const { createClient } = require('@supabase/supabase-js');
+const fs = require('fs');
+const path = require('path');
+
+// Self-hosted credentials
+const TARGET_URL = 'https://db.yourdomain.com';
+const TARGET_SERVICE_KEY = 'your-service-role-key';
+
+const supabase = createClient(TARGET_URL, TARGET_SERVICE_KEY);
+
+async function uploadBucket(bucketName, sourceDir) {
+  console.log(`Uploading to bucket: ${bucketName}`);
+  
+  // Create bucket if it doesn't exist
+  await supabase.storage.createBucket(bucketName, { public: true });
+  
+  const files = fs.readdirSync(sourceDir);
+  
+  for (const fileName of files) {
+    const filePath = path.join(sourceDir, fileName);
+    const fileBuffer = fs.readFileSync(filePath);
+    
+    console.log(`  Uploading: ${fileName}`);
+    
+    const { error } = await supabase.storage
+      .from(bucketName)
+      .upload(fileName, fileBuffer, {
+        contentType: 'image/jpeg', // Adjust based on file type
+        upsert: true
+      });
+    
+    if (error) {
+      console.error(`  Error uploading ${fileName}:`, error.message);
+    }
+  }
+  
+  console.log(`✅ Uploaded ${files.length} files to ${bucketName}`);
+}
+
+uploadBucket('product-images', './storage-backup/product-images');
+```
+
+### Migrating User Accounts
+
+User authentication data requires special handling:
+
+#### Option A: Re-create Users (Recommended for Small Teams)
+
+Since Fady Technologies uses admin-created staff accounts, the simplest approach is to recreate users on the self-hosted instance:
+
+1. Note down all user emails and roles from Lovable Cloud
+2. Use the Staff Management page on the self-hosted instance to create new accounts
+3. Users will receive password reset emails to set new passwords
+
+#### Option B: Export/Import Auth Data (Advanced)
+
+```sql
+-- On Lovable Cloud (requires direct database access)
+-- Export users
+COPY (
+  SELECT id, email, encrypted_password, created_at, updated_at, 
+         raw_app_meta_data, raw_user_meta_data
+  FROM auth.users
+) TO STDOUT WITH CSV HEADER;
+
+-- Export user roles
+COPY (SELECT * FROM public.user_roles) TO STDOUT WITH CSV HEADER;
+```
+
+```sql
+-- On self-hosted instance
+-- Import users (be careful with auth schema!)
+-- This requires service_role access and careful handling
+```
+
+**⚠️ Warning**: Directly manipulating the `auth.users` table is risky. The recommended approach is to recreate users and have them set new passwords.
+
+### Post-Migration Checklist
+
+After completing the migration:
+
+- [ ] Verify all tables have data: `SELECT COUNT(*) FROM table_name;`
+- [ ] Test user authentication (login/logout)
+- [ ] Verify product images display correctly
+- [ ] Test POS functionality with a sample sale
+- [ ] Verify reports generate correctly
+- [ ] Check that all admin pages load properly
+- [ ] Test barcode scanning functionality
+- [ ] Verify credit sales and payment tracking
+- [ ] Update any hardcoded URLs in your codebase
+- [ ] Update DNS if using a custom domain
+- [ ] Remove or archive Lovable Cloud data (optional)
+
+### Updating Application Configuration
+
+After migration, update your app to point to the self-hosted instance:
+
+```typescript
+// src/integrations/supabase/client.ts
+const SUPABASE_URL = "https://db.yourdomain.com";
+const SUPABASE_ANON_KEY = "your-self-hosted-anon-key";
+```
+
+Rebuild and redeploy your application:
+
+```bash
+cd /var/www/fady-technologies
+git pull
+npm install
+npm run build
+pm2 restart fady-tech
 ```
 
 ---
