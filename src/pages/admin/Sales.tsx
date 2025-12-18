@@ -12,7 +12,7 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
-import { Receipt, Search, Eye, Printer, DollarSign, TrendingUp, RotateCcw, Ban, ScanLine, Trash2 } from 'lucide-react';
+import { Receipt, Search, Eye, Printer, DollarSign, TrendingUp, RotateCcw, Ban, ScanLine, Trash2, ArchiveRestore, Archive } from 'lucide-react';
 import { formatCurrency } from '@/lib/currency';
 import BarcodeScanner from '@/components/BarcodeScanner';
 
@@ -27,6 +27,7 @@ interface Sale {
   amount_paid: number;
   change_given: number;
   created_at: string;
+  deleted_at: string | null;
 }
 
 interface SaleItem {
@@ -53,6 +54,7 @@ interface Refund {
   amount: number;
   items_returned: any;
   created_at: string;
+  deleted_at: string | null;
   sales: { customer_name: string | null } | null;
 }
 
@@ -60,6 +62,7 @@ const Sales = () => {
   const { user } = useAuth();
   const { toast } = useToast();
   const [sales, setSales] = useState<Sale[]>([]);
+  const [deletedSales, setDeletedSales] = useState<Sale[]>([]);
   const [refunds, setRefunds] = useState<Refund[]>([]);
   const [selectedSale, setSelectedSale] = useState<Sale | null>(null);
   const [saleItems, setSaleItems] = useState<SaleItem[]>([]);
@@ -82,6 +85,7 @@ const Sales = () => {
 
   useEffect(() => {
     fetchSales();
+    fetchDeletedSales();
     fetchRefunds();
     checkAdminStatus();
   }, [dateFilter]);
@@ -102,6 +106,7 @@ const Sales = () => {
     let query = supabase
       .from('sales')
       .select('*')
+      .is('deleted_at', null)
       .order('created_at', { ascending: false });
 
     if (dateFilter) {
@@ -125,10 +130,22 @@ const Sales = () => {
     setLoading(false);
   };
 
+  const fetchDeletedSales = async () => {
+    const { data } = await supabase
+      .from('sales')
+      .select('*')
+      .not('deleted_at', 'is', null)
+      .order('deleted_at', { ascending: false })
+      .limit(50);
+    
+    setDeletedSales(data || []);
+  };
+
   const fetchRefunds = async () => {
     const { data, error } = await supabase
       .from('refunds')
       .select('*, sales(customer_name)')
+      .is('deleted_at', null)
       .order('created_at', { ascending: false });
 
     if (!error) setRefunds(data || []);
@@ -334,7 +351,49 @@ const Sales = () => {
   };
 
   const deleteSale = async (sale: Sale) => {
-    if (!confirm(`Are you sure you want to permanently delete sale ${sale.receipt_number}? This action cannot be undone.`)) {
+    if (!confirm(`Are you sure you want to delete sale ${sale.receipt_number}? It can be recovered later.`)) {
+      return;
+    }
+
+    try {
+      // Soft delete the sale
+      const { error } = await supabase
+        .from('sales')
+        .update({ deleted_at: new Date().toISOString() })
+        .eq('id', sale.id);
+
+      if (error) throw error;
+
+      toast({ title: 'Success', description: `Sale ${sale.receipt_number} moved to trash` });
+      fetchSales();
+      fetchDeletedSales();
+      setSelectedSale(null);
+
+    } catch (error: any) {
+      toast({ title: 'Error', description: error.message, variant: 'destructive' });
+    }
+  };
+
+  const recoverSale = async (sale: Sale) => {
+    try {
+      const { error } = await supabase
+        .from('sales')
+        .update({ deleted_at: null })
+        .eq('id', sale.id);
+
+      if (error) throw error;
+
+      toast({ title: 'Success', description: `Sale ${sale.receipt_number} recovered` });
+      fetchSales();
+      fetchDeletedSales();
+
+    } catch (error: any) {
+      toast({ title: 'Error', description: error.message, variant: 'destructive' });
+    }
+  };
+
+  const permanentlyDeleteSale = async (sale: Sale) => {
+    if (!confirm(`Are you sure you want to PERMANENTLY delete sale ${sale.receipt_number}? This cannot be undone.`)) {
       return;
     }
 
@@ -351,7 +410,7 @@ const Sales = () => {
         .delete()
         .eq('sale_id', sale.id);
 
-      // Delete the sale
+      // Delete the sale permanently
       const { error } = await supabase
         .from('sales')
         .delete()
@@ -359,10 +418,29 @@ const Sales = () => {
 
       if (error) throw error;
 
-      toast({ title: 'Success', description: `Sale ${sale.receipt_number} deleted permanently` });
-      fetchSales();
+      toast({ title: 'Success', description: `Sale ${sale.receipt_number} permanently deleted` });
+      fetchDeletedSales();
+
+    } catch (error: any) {
+      toast({ title: 'Error', description: error.message, variant: 'destructive' });
+    }
+  };
+
+  const deleteRefund = async (refund: Refund) => {
+    if (!confirm(`Are you sure you want to delete this refund record for ${refund.receipt_number}?`)) {
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from('refunds')
+        .update({ deleted_at: new Date().toISOString() })
+        .eq('id', refund.id);
+
+      if (error) throw error;
+
+      toast({ title: 'Success', description: 'Refund record deleted' });
       fetchRefunds();
-      setSelectedSale(null);
 
     } catch (error: any) {
       toast({ title: 'Error', description: error.message, variant: 'destructive' });
@@ -505,7 +583,6 @@ const Sales = () => {
         )}
       </div>
 
-      {/* Tabs for Sales and Refunds */}
       <Tabs defaultValue="sales" className="space-y-4">
         <TabsList>
           <TabsTrigger value="sales" className="gap-2">
@@ -516,6 +593,12 @@ const Sales = () => {
             <RotateCcw className="h-4 w-4" />
             Refund History
           </TabsTrigger>
+          {isAdmin && (
+            <TabsTrigger value="deleted" className="gap-2">
+              <Archive className="h-4 w-4" />
+              Deleted ({deletedSales.length})
+            </TabsTrigger>
+          )}
         </TabsList>
 
         <TabsContent value="sales">
@@ -601,6 +684,7 @@ const Sales = () => {
                     <TableHead>Type</TableHead>
                     <TableHead>Reason</TableHead>
                     <TableHead className="text-right">Amount</TableHead>
+                    {isAdmin && <TableHead className="text-right">Actions</TableHead>}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -618,11 +702,18 @@ const Sales = () => {
                       <TableCell className="text-right font-medium text-red-600">
                         -{formatCurrency(refund.amount)}
                       </TableCell>
+                      {isAdmin && (
+                        <TableCell className="text-right">
+                          <Button size="sm" variant="ghost" onClick={() => deleteRefund(refund)} title="Delete Refund" className="text-destructive hover:text-destructive">
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </TableCell>
+                      )}
                     </TableRow>
                   ))}
                   {filteredRefunds.length === 0 && (
                     <TableRow>
-                      <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
+                      <TableCell colSpan={isAdmin ? 7 : 6} className="text-center text-muted-foreground py-8">
                         No refunds found
                       </TableCell>
                     </TableRow>
@@ -632,6 +723,62 @@ const Sales = () => {
             </CardContent>
           </Card>
         </TabsContent>
+
+        {/* Deleted Sales Tab - Admin Only */}
+        {isAdmin && (
+          <TabsContent value="deleted">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Archive className="h-5 w-5" />
+                  Deleted Sales
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Receipt #</TableHead>
+                      <TableHead>Deleted At</TableHead>
+                      <TableHead>Original Date</TableHead>
+                      <TableHead>Customer</TableHead>
+                      <TableHead className="text-right">Total</TableHead>
+                      <TableHead className="text-right">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {deletedSales.map(sale => (
+                      <TableRow key={sale.id}>
+                        <TableCell className="font-mono">{sale.receipt_number}</TableCell>
+                        <TableCell>{sale.deleted_at ? new Date(sale.deleted_at).toLocaleString() : '-'}</TableCell>
+                        <TableCell>{new Date(sale.created_at).toLocaleString()}</TableCell>
+                        <TableCell>{sale.customer_name || 'Walk-in'}</TableCell>
+                        <TableCell className="text-right font-medium">{formatCurrency(sale.total)}</TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex justify-end gap-1">
+                            <Button size="sm" variant="ghost" onClick={() => recoverSale(sale)} title="Recover Sale" className="text-green-600 hover:text-green-700">
+                              <ArchiveRestore className="h-4 w-4" />
+                            </Button>
+                            <Button size="sm" variant="ghost" onClick={() => permanentlyDeleteSale(sale)} title="Delete Permanently" className="text-destructive hover:text-destructive">
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                    {deletedSales.length === 0 && (
+                      <TableRow>
+                        <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
+                          No deleted sales
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
+          </TabsContent>
+        )}
       </Tabs>
 
       {/* Sale Details Dialog */}

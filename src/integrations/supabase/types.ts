@@ -626,6 +626,7 @@ export type Database = {
         Row: {
           amount: number
           created_at: string
+          deleted_at: string | null
           id: string
           items_returned: Json | null
           reason: string
@@ -636,6 +637,7 @@ export type Database = {
         Insert: {
           amount: number
           created_at?: string
+          deleted_at?: string | null
           id?: string
           items_returned?: Json | null
           reason: string
@@ -646,6 +648,7 @@ export type Database = {
         Update: {
           amount?: number
           created_at?: string
+          deleted_at?: string | null
           id?: string
           items_returned?: Json | null
           reason?: string
@@ -718,6 +721,7 @@ export type Database = {
           created_at: string
           customer_id: string | null
           customer_name: string | null
+          deleted_at: string | null
           discount: number | null
           id: string
           notes: string | null
@@ -734,6 +738,7 @@ export type Database = {
           created_at?: string
           customer_id?: string | null
           customer_name?: string | null
+          deleted_at?: string | null
           discount?: number | null
           id?: string
           notes?: string | null
@@ -750,6 +755,7 @@ export type Database = {
           created_at?: string
           customer_id?: string | null
           customer_name?: string | null
+          deleted_at?: string | null
           discount?: number | null
           id?: string
           notes?: string | null
