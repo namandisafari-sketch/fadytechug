@@ -79,6 +79,10 @@ const Products = () => {
   const [quickLoading, setQuickLoading] = useState(false);
   const [quickSuccess, setQuickSuccess] = useState(false);
 
+  // Multi-location stock distribution
+  const [locationStocks, setLocationStocks] = useState<Record<string, number>>({});
+  const [quickLocationStocks, setQuickLocationStocks] = useState<Record<string, number>>({});
+
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [category, setCategory] = useState('');
@@ -158,6 +162,7 @@ const Products = () => {
     setImageUrl(null);
     setImageFile(null);
     setImagePreview(null);
+    setLocationStocks({});
   };
 
   const resetQuickForm = () => {
@@ -165,7 +170,31 @@ const Products = () => {
     setQuickCategory('');
     setQuickPrice('');
     setQuickStock('1');
+    setQuickLocationStocks({});
   };
+
+  const updateLocationStock = (locationName: string, qty: number) => {
+    setLocationStocks(prev => {
+      if (qty <= 0) {
+        const { [locationName]: _, ...rest } = prev;
+        return rest;
+      }
+      return { ...prev, [locationName]: qty };
+    });
+  };
+
+  const updateQuickLocationStock = (locationName: string, qty: number) => {
+    setQuickLocationStocks(prev => {
+      if (qty <= 0) {
+        const { [locationName]: _, ...rest } = prev;
+        return rest;
+      }
+      return { ...prev, [locationName]: qty };
+    });
+  };
+
+  const getTotalLocationStock = () => Object.values(locationStocks).reduce((sum, qty) => sum + qty, 0);
+  const getTotalQuickLocationStock = () => Object.values(quickLocationStocks).reduce((sum, qty) => sum + qty, 0);
 
   const handleQuickAdd = async () => {
     if (!quickName.trim()) {
@@ -182,20 +211,50 @@ const Products = () => {
       return;
     }
 
+    const hasLocationDistribution = Object.keys(quickLocationStocks).length > 0;
+    const totalStock = hasLocationDistribution ? getTotalQuickLocationStock() : (parseInt(quickStock) || 1);
+
     setQuickLoading(true);
 
     try {
-      const { error } = await supabase.from('products').insert({
+      const { data: productData, error } = await supabase.from('products').insert({
         name: quickName.trim(),
         category: quickCategory,
         price: parseFloat(quickPrice),
-        stock_quantity: parseInt(quickStock) || 1,
+        stock_quantity: totalStock,
         is_active: true,
         condition: 'new',
         created_by: user?.id
-      });
+      }).select().single();
 
       if (error) throw error;
+
+      // Create inventory transactions for each location if distributed
+      if (hasLocationDistribution && productData) {
+        const transactions = Object.entries(quickLocationStocks).map(([loc, qty]) => ({
+          product_id: productData.id,
+          transaction_type: 'purchase' as const,
+          quantity: qty,
+          previous_stock: 0,
+          new_stock: qty,
+          notes: `Initial stock at ${loc}`,
+          created_by: user?.id
+        }));
+
+        await supabase.from('inventory_transactions').insert(transactions);
+
+        // Create stock transfer records for tracking location
+        for (const [loc, qty] of Object.entries(quickLocationStocks)) {
+          await supabase.from('stock_transfers').insert({
+            product_id: productData.id,
+            from_location: 'Supplier',
+            to_location: loc,
+            quantity: qty,
+            notes: 'Initial stock distribution',
+            transferred_by: user?.id
+          });
+        }
+      }
 
       // Show success animation
       setQuickSuccess(true);
@@ -333,6 +392,9 @@ const Products = () => {
       return;
     }
 
+    const hasLocationDistribution = Object.keys(locationStocks).length > 0;
+    const totalStock = hasLocationDistribution ? getTotalLocationStock() : (parseInt(stockQuantity) || 0);
+
     setLoading(true);
 
     try {
@@ -343,7 +405,7 @@ const Products = () => {
         description: description || null,
         category,
         price: parseFloat(price),
-        stock_quantity: parseInt(stockQuantity) || 0,
+        stock_quantity: totalStock,
         is_active: isActive,
         is_featured: isFeatured,
         barcode: barcode.trim() || null,
@@ -369,8 +431,37 @@ const Products = () => {
         if (error) throw error;
         toast({ title: 'Success', description: 'Product updated' });
       } else {
-        const { error } = await supabase.from('products').insert(productData);
+        const { data: newProduct, error } = await supabase.from('products').insert(productData).select().single();
         if (error) throw error;
+
+        // Create inventory transactions and stock transfers for each location if distributed
+        if (hasLocationDistribution && newProduct) {
+          const transactions = Object.entries(locationStocks).map(([loc, qty]) => ({
+            product_id: newProduct.id,
+            transaction_type: 'purchase' as const,
+            quantity: qty,
+            previous_stock: 0,
+            new_stock: qty,
+            notes: `Initial stock at ${loc}`,
+            unit_cost: unitCost ? parseFloat(unitCost) : null,
+            created_by: user?.id
+          }));
+
+          await supabase.from('inventory_transactions').insert(transactions);
+
+          // Create stock transfer records for tracking location
+          for (const [loc, qty] of Object.entries(locationStocks)) {
+            await supabase.from('stock_transfers').insert({
+              product_id: newProduct.id,
+              from_location: 'Supplier',
+              to_location: loc,
+              quantity: qty,
+              notes: 'Initial stock distribution',
+              transferred_by: user?.id
+            });
+          }
+        }
+
         toast({ title: 'Success', description: 'Product added' });
       }
 
@@ -479,8 +570,19 @@ const Products = () => {
                   <Input type="number" value={unitCost} onChange={(e) => setUnitCost(e.target.value)} className="h-11" placeholder="120000" />
                 </div>
                 <div>
-                  <Label className="text-base font-bold">Stock *</Label>
-                  <Input type="number" value={stockQuantity} onChange={(e) => setStockQuantity(e.target.value)} className="h-11 text-lg font-semibold" placeholder="10" />
+                  <Label className="text-base font-bold">Total Stock</Label>
+                  <Input 
+                    type="number" 
+                    value={Object.keys(locationStocks).length > 0 ? getTotalLocationStock() : stockQuantity} 
+                    onChange={(e) => {
+                      if (Object.keys(locationStocks).length === 0) {
+                        setStockQuantity(e.target.value);
+                      }
+                    }}
+                    disabled={Object.keys(locationStocks).length > 0}
+                    className="h-11 text-lg font-semibold" 
+                    placeholder="10" 
+                  />
                 </div>
                 <div>
                   <Label>Condition</Label>
@@ -492,6 +594,37 @@ const Products = () => {
                   </Select>
                 </div>
               </div>
+
+              {/* Location Distribution - Distribute Stock */}
+              {!editingProduct && locations.length > 0 && (
+                <div className="p-3 bg-muted/50 rounded-lg border border-border">
+                  <Label className="text-sm font-bold flex items-center gap-2 mb-3">
+                    <MapPin className="h-4 w-4" />
+                    Distribute Stock by Location
+                    {Object.keys(locationStocks).length > 0 && (
+                      <Badge variant="secondary" className="ml-2">Total: {getTotalLocationStock()}</Badge>
+                    )}
+                  </Label>
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                    {locations.map(loc => (
+                      <div key={loc.id} className="flex items-center gap-2">
+                        <Input
+                          type="number"
+                          min="0"
+                          placeholder="0"
+                          value={locationStocks[loc.name] || ''}
+                          onChange={(e) => updateLocationStock(loc.name, parseInt(e.target.value) || 0)}
+                          className="h-9 w-20"
+                        />
+                        <span className="text-sm truncate">{loc.name}</span>
+                      </div>
+                    ))}
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-2">
+                    Enter quantities per location to distribute stock. Leave empty to use total stock without distribution.
+                  </p>
+                </div>
+              )}
 
               {/* Row 3: Identifiers */}
               <div className="grid grid-cols-4 gap-3">
@@ -633,8 +766,13 @@ const Products = () => {
                 <Label className="text-base font-bold">Stock</Label>
                 <Input
                   type="number"
-                  value={quickStock}
-                  onChange={(e) => setQuickStock(e.target.value)}
+                  value={Object.keys(quickLocationStocks).length > 0 ? getTotalQuickLocationStock() : quickStock}
+                  onChange={(e) => {
+                    if (Object.keys(quickLocationStocks).length === 0) {
+                      setQuickStock(e.target.value);
+                    }
+                  }}
+                  disabled={Object.keys(quickLocationStocks).length > 0}
                   className="h-12 text-lg text-center"
                   min="0"
                 />
@@ -663,6 +801,34 @@ const Products = () => {
               </div>
             </div>
           </div>
+
+          {/* Quick Add Location Distribution */}
+          {locations.length > 0 && (
+            <div className="mt-4 p-3 bg-muted/50 rounded-lg border border-border">
+              <Label className="text-sm font-bold flex items-center gap-2 mb-2">
+                <MapPin className="h-4 w-4" />
+                Distribute Stock by Location (Optional)
+                {Object.keys(quickLocationStocks).length > 0 && (
+                  <Badge variant="secondary">Total: {getTotalQuickLocationStock()}</Badge>
+                )}
+              </Label>
+              <div className="flex flex-wrap gap-3">
+                {locations.map(loc => (
+                  <div key={loc.id} className="flex items-center gap-2 bg-background p-2 rounded border">
+                    <Input
+                      type="number"
+                      min="0"
+                      placeholder="0"
+                      value={quickLocationStocks[loc.name] || ''}
+                      onChange={(e) => updateQuickLocationStock(loc.name, parseInt(e.target.value) || 0)}
+                      className="h-8 w-16 text-center"
+                    />
+                    <span className="text-sm">{loc.name}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           <p className="text-sm text-muted-foreground mt-3">
             Need to add more details? Use the "Full Details" button above to add images, barcodes, manufacturer info, and more.
