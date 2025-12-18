@@ -109,6 +109,9 @@ const Inventory = () => {
   const [transferNotes, setTransferNotes] = useState('');
   const [transferLoading, setTransferLoading] = useState(false);
 
+  // Location monitoring state
+  const [selectedMonitorLocation, setSelectedMonitorLocation] = useState<string>('all');
+
   useEffect(() => {
     fetchProducts();
     fetchTransactions();
@@ -302,6 +305,36 @@ const Inventory = () => {
   const reorderProducts = products.filter(p => p.stock_quantity <= reorderThreshold && p.stock_quantity > lowStockThreshold);
   const totalInventoryValue = products.reduce((sum, p) => sum + (p.price * p.stock_quantity), 0);
   const totalItems = products.reduce((sum, p) => sum + p.stock_quantity, 0);
+
+  // Location-based stats
+  const locationStats = locations.map(loc => {
+    const productsAtLocation = products.filter(p => p.location === loc.name);
+    const totalStock = productsAtLocation.reduce((sum, p) => sum + p.stock_quantity, 0);
+    const totalValue = productsAtLocation.reduce((sum, p) => sum + (p.price * p.stock_quantity), 0);
+    const productCount = productsAtLocation.length;
+    const lowStockCount = productsAtLocation.filter(p => p.stock_quantity <= lowStockThreshold && p.stock_quantity > 0).length;
+    const outOfStockCount = productsAtLocation.filter(p => p.stock_quantity === 0).length;
+    return { location: loc, totalStock, totalValue, productCount, lowStockCount, outOfStockCount, products: productsAtLocation };
+  });
+
+  // Unassigned products (no location)
+  const unassignedProducts = products.filter(p => !p.location);
+  const unassignedStats = {
+    location: { id: 'unassigned', name: 'Unassigned', is_active: true },
+    totalStock: unassignedProducts.reduce((sum, p) => sum + p.stock_quantity, 0),
+    totalValue: unassignedProducts.reduce((sum, p) => sum + (p.price * p.stock_quantity), 0),
+    productCount: unassignedProducts.length,
+    lowStockCount: unassignedProducts.filter(p => p.stock_quantity <= lowStockThreshold && p.stock_quantity > 0).length,
+    outOfStockCount: unassignedProducts.filter(p => p.stock_quantity === 0).length,
+    products: unassignedProducts
+  };
+
+  // Products filtered by selected monitor location
+  const locationFilteredProducts = selectedMonitorLocation === 'all' 
+    ? products 
+    : selectedMonitorLocation === 'unassigned'
+    ? unassignedProducts
+    : products.filter(p => p.location === selectedMonitorLocation);
 
   const exportInventory = () => {
     const csv = [
@@ -851,6 +884,9 @@ const Inventory = () => {
           <TabsTrigger value="stock" className="gap-2">
             <ClipboardList className="h-4 w-4" />Stock Levels
           </TabsTrigger>
+          <TabsTrigger value="locations" className="gap-2">
+            <MapPin className="h-4 w-4" />By Location
+          </TabsTrigger>
           <TabsTrigger value="history" className="gap-2">
             <History className="h-4 w-4" />Transaction History
           </TabsTrigger>
@@ -1014,6 +1050,180 @@ const Inventory = () => {
                   </TableBody>
                 </Table>
               </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* By Location Tab */}
+        <TabsContent value="locations" className="space-y-4">
+          {/* Location Overview Cards */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+            {locationStats.map(stat => (
+              <Card 
+                key={stat.location.id} 
+                className={`cursor-pointer transition-all ${
+                  selectedMonitorLocation === stat.location.name 
+                    ? 'ring-2 ring-primary border-primary' 
+                    : 'hover:border-primary/50'
+                }`}
+                onClick={() => setSelectedMonitorLocation(
+                  selectedMonitorLocation === stat.location.name ? 'all' : stat.location.name
+                )}
+              >
+                <CardContent className="pt-4">
+                  <div className="flex items-center gap-3 mb-3">
+                    <div className="p-2 bg-primary/10 rounded-lg">
+                      <Warehouse className="h-5 w-5 text-primary" />
+                    </div>
+                    <div>
+                      <h3 className="font-bold">{stat.location.name}</h3>
+                      <p className="text-xs text-muted-foreground">{stat.productCount} products</p>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 text-sm">
+                    <div>
+                      <p className="text-muted-foreground text-xs">Total Stock</p>
+                      <p className="font-bold text-lg">{stat.totalStock}</p>
+                    </div>
+                    <div>
+                      <p className="text-muted-foreground text-xs">Value</p>
+                      <p className="font-bold text-sm">{formatCurrency(stat.totalValue)}</p>
+                    </div>
+                  </div>
+                  {(stat.lowStockCount > 0 || stat.outOfStockCount > 0) && (
+                    <div className="flex gap-2 mt-3">
+                      {stat.outOfStockCount > 0 && (
+                        <Badge variant="destructive" className="text-xs">{stat.outOfStockCount} out</Badge>
+                      )}
+                      {stat.lowStockCount > 0 && (
+                        <Badge variant="secondary" className="text-xs border-orange-500 text-orange-600">{stat.lowStockCount} low</Badge>
+                      )}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            ))}
+            
+            {/* Unassigned Card */}
+            {unassignedStats.productCount > 0 && (
+              <Card 
+                className={`cursor-pointer transition-all border-dashed ${
+                  selectedMonitorLocation === 'unassigned' 
+                    ? 'ring-2 ring-primary border-primary' 
+                    : 'hover:border-primary/50'
+                }`}
+                onClick={() => setSelectedMonitorLocation(
+                  selectedMonitorLocation === 'unassigned' ? 'all' : 'unassigned'
+                )}
+              >
+                <CardContent className="pt-4">
+                  <div className="flex items-center gap-3 mb-3">
+                    <div className="p-2 bg-muted rounded-lg">
+                      <Box className="h-5 w-5 text-muted-foreground" />
+                    </div>
+                    <div>
+                      <h3 className="font-bold text-muted-foreground">Unassigned</h3>
+                      <p className="text-xs text-muted-foreground">{unassignedStats.productCount} products</p>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 text-sm">
+                    <div>
+                      <p className="text-muted-foreground text-xs">Total Stock</p>
+                      <p className="font-bold text-lg">{unassignedStats.totalStock}</p>
+                    </div>
+                    <div>
+                      <p className="text-muted-foreground text-xs">Value</p>
+                      <p className="font-bold text-sm">{formatCurrency(unassignedStats.totalValue)}</p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+          </div>
+
+          {/* Selected Location Products */}
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <CardTitle className="flex items-center gap-2">
+                  <MapPin className="h-5 w-5" />
+                  {selectedMonitorLocation === 'all' 
+                    ? 'All Locations' 
+                    : selectedMonitorLocation === 'unassigned' 
+                    ? 'Unassigned Products' 
+                    : `${selectedMonitorLocation} Stock`}
+                </CardTitle>
+                {selectedMonitorLocation !== 'all' && (
+                  <Button variant="outline" size="sm" onClick={() => setSelectedMonitorLocation('all')}>
+                    View All
+                  </Button>
+                )}
+              </div>
+            </CardHeader>
+            <CardContent>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Product</TableHead>
+                    <TableHead>Category</TableHead>
+                    <TableHead>Location</TableHead>
+                    <TableHead className="text-right">Stock</TableHead>
+                    <TableHead className="text-right">Value</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {locationFilteredProducts.map(product => {
+                    const isLow = product.stock_quantity <= lowStockThreshold && product.stock_quantity > 0;
+                    const isOut = product.stock_quantity === 0;
+                    return (
+                      <TableRow key={product.id}>
+                        <TableCell className="font-medium">{product.name}</TableCell>
+                        <TableCell>{product.category}</TableCell>
+                        <TableCell>
+                          <Badge variant="outline" className="gap-1">
+                            <MapPin className="h-3 w-3" />
+                            {product.location || 'Unassigned'}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-right font-mono">
+                          <span className={isOut ? 'text-red-600' : isLow ? 'text-orange-600' : ''}>
+                            {product.stock_quantity}
+                          </span>
+                        </TableCell>
+                        <TableCell className="text-right">
+                          {formatCurrency(product.price * product.stock_quantity)}
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant={isOut ? 'destructive' : isLow ? 'secondary' : 'default'}>
+                            {isOut ? 'Out' : isLow ? 'Low' : 'Good'}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          <Button 
+                            variant="outline" 
+                            size="sm"
+                            onClick={() => openTransferDialog(product)}
+                            disabled={product.stock_quantity === 0}
+                            className="gap-1"
+                          >
+                            <ArrowRightLeft className="h-3 w-3" />
+                            Transfer
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                  {locationFilteredProducts.length === 0 && (
+                    <TableRow>
+                      <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
+                        No products at this location
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
             </CardContent>
           </Card>
         </TabsContent>
