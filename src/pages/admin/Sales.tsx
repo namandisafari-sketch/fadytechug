@@ -12,7 +12,7 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
-import { Receipt, Search, Eye, Printer, DollarSign, TrendingUp, RotateCcw, Ban, ScanLine } from 'lucide-react';
+import { Receipt, Search, Eye, Printer, DollarSign, TrendingUp, RotateCcw, Ban, ScanLine, Trash2 } from 'lucide-react';
 import { formatCurrency } from '@/lib/currency';
 import BarcodeScanner from '@/components/BarcodeScanner';
 
@@ -66,6 +66,7 @@ const Sales = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [dateFilter, setDateFilter] = useState('');
   const [loading, setLoading] = useState(true);
+  const [isAdmin, setIsAdmin] = useState(false);
   
   // Scanner state
   const [scannerOpen, setScannerOpen] = useState(false);
@@ -82,7 +83,19 @@ const Sales = () => {
   useEffect(() => {
     fetchSales();
     fetchRefunds();
+    checkAdminStatus();
   }, [dateFilter]);
+
+  const checkAdminStatus = async () => {
+    if (!user?.id) return;
+    const { data } = await supabase
+      .from('user_roles')
+      .select('role')
+      .eq('user_id', user.id)
+      .eq('role', 'admin')
+      .maybeSingle();
+    setIsAdmin(!!data);
+  };
 
   const fetchSales = async () => {
     setLoading(true);
@@ -320,6 +333,42 @@ const Sales = () => {
     }
   };
 
+  const deleteSale = async (sale: Sale) => {
+    if (!confirm(`Are you sure you want to permanently delete sale ${sale.receipt_number}? This action cannot be undone.`)) {
+      return;
+    }
+
+    try {
+      // Delete associated refunds first
+      await supabase
+        .from('refunds')
+        .delete()
+        .eq('sale_id', sale.id);
+
+      // Delete sale items
+      await supabase
+        .from('sale_items')
+        .delete()
+        .eq('sale_id', sale.id);
+
+      // Delete the sale
+      const { error } = await supabase
+        .from('sales')
+        .delete()
+        .eq('id', sale.id);
+
+      if (error) throw error;
+
+      toast({ title: 'Success', description: `Sale ${sale.receipt_number} deleted permanently` });
+      fetchSales();
+      fetchRefunds();
+      setSelectedSale(null);
+
+    } catch (error: any) {
+      toast({ title: 'Error', description: error.message, variant: 'destructive' });
+    }
+  };
+
   const handleBarcodeScan = async (code: string) => {
     // Search for receipt by scanned code
     setSearchTerm(code);
@@ -512,6 +561,11 @@ const Sales = () => {
                           <Button size="sm" variant="ghost" onClick={() => voidReceipt(sale)} title="Void Receipt" className="text-destructive hover:text-destructive">
                             <Ban className="h-4 w-4" />
                           </Button>
+                          {isAdmin && (
+                            <Button size="sm" variant="ghost" onClick={() => deleteSale(sale)} title="Delete Sale (Admin)" className="text-destructive hover:text-destructive">
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          )}
                         </div>
                       </TableCell>
                     </TableRow>
@@ -641,15 +695,23 @@ const Sales = () => {
                 )}
               </div>
 
-              <div className="flex gap-2 pt-4 border-t">
-                <Button variant="outline" className="flex-1" onClick={() => { setSelectedSale(null); openRefundDialog(selectedSale); }}>
-                  <RotateCcw className="h-4 w-4 mr-2" />
-                  Process Refund
-                </Button>
-                <Button variant="destructive" className="flex-1" onClick={() => { setSelectedSale(null); voidReceipt(selectedSale); }}>
-                  <Ban className="h-4 w-4 mr-2" />
-                  Void Receipt
-                </Button>
+              <div className="flex flex-col gap-2 pt-4 border-t">
+                <div className="flex gap-2">
+                  <Button variant="outline" className="flex-1" onClick={() => { setSelectedSale(null); openRefundDialog(selectedSale); }}>
+                    <RotateCcw className="h-4 w-4 mr-2" />
+                    Process Refund
+                  </Button>
+                  <Button variant="destructive" className="flex-1" onClick={() => { setSelectedSale(null); voidReceipt(selectedSale); }}>
+                    <Ban className="h-4 w-4 mr-2" />
+                    Void Receipt
+                  </Button>
+                </div>
+                {isAdmin && (
+                  <Button variant="destructive" className="w-full" onClick={() => deleteSale(selectedSale)}>
+                    <Trash2 className="h-4 w-4 mr-2" />
+                    Delete Sale Permanently
+                  </Button>
+                )}
               </div>
             </div>
           )}
