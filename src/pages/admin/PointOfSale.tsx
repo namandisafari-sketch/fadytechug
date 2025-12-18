@@ -8,11 +8,15 @@ import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
-import { Search, Plus, Minus, Trash2, ShoppingCart, Printer, Barcode, ScanLine, Edit2 } from 'lucide-react';
+import { Search, Plus, Minus, Trash2, ShoppingCart, Printer, Barcode, ScanLine, Edit2, CalendarIcon } from 'lucide-react';
 import fadyLogo from '@/assets/fady-logo.png';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { formatCurrency } from '@/lib/currency';
 import { QRCodeSVG } from 'qrcode.react';
+import { format } from 'date-fns';
+import { cn } from '@/lib/utils';
+import { Calendar } from '@/components/ui/calendar';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 interface Product {
   id: string;
   name: string;
@@ -56,6 +60,9 @@ const PointOfSale = () => {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [selectedCustomerId, setSelectedCustomerId] = useState<string>('');
   const [creditNotes, setCreditNotes] = useState('');
+  
+  // Backdate sale state
+  const [saleDate, setSaleDate] = useState<Date | undefined>(undefined);
 
   useEffect(() => {
     fetchProducts();
@@ -205,22 +212,31 @@ const PointOfSale = () => {
       const selectedCustomer = customers.find(c => c.id === selectedCustomerId);
       const actualAmountPaid = paymentMethod === 'credit' ? (parseFloat(amountPaid) || 0) : (parseFloat(amountPaid) || total);
 
-      // Create sale record
+      // Create sale record with optional backdate
+      const saleData: any = {
+        receipt_number: receiptNumber,
+        customer_id: selectedCustomerId || null,
+        customer_name: selectedCustomer?.name || customerName || 'Walk-in Customer',
+        subtotal,
+        discount: discountAmount,
+        total,
+        payment_method: paymentMethod as any,
+        amount_paid: actualAmountPaid,
+        change_given: paymentMethod === 'cash' ? Math.max(0, change) : 0,
+        sold_by: user?.id,
+        notes: paymentMethod === 'credit' 
+          ? `Credit Sale - ${creditNotes}` 
+          : saleDate ? `Backdated sale from ${format(saleDate, 'PPP')}` : null
+      };
+
+      // If backdating, override created_at
+      if (saleDate) {
+        saleData.created_at = saleDate.toISOString();
+      }
+
       const { data: sale, error: saleError } = await supabase
         .from('sales')
-        .insert({
-          receipt_number: receiptNumber,
-          customer_id: selectedCustomerId || null,
-          customer_name: selectedCustomer?.name || customerName || 'Walk-in Customer',
-          subtotal,
-          discount: discountAmount,
-          total,
-          payment_method: paymentMethod as any,
-          amount_paid: actualAmountPaid,
-          change_given: paymentMethod === 'cash' ? Math.max(0, change) : 0,
-          sold_by: user?.id,
-          notes: paymentMethod === 'credit' ? `Credit Sale - ${creditNotes}` : null
-        })
+        .insert(saleData)
         .select()
         .single();
 
@@ -311,6 +327,7 @@ const PointOfSale = () => {
       setDiscount('0');
       setSelectedCustomerId('');
       setCreditNotes('');
+      setSaleDate(undefined);
       fetchProducts();
 
       toast({ title: 'Success', description: paymentMethod === 'credit' ? 'Credit sale recorded successfully' : 'Sale completed successfully' });
@@ -497,6 +514,52 @@ const PointOfSale = () => {
                     onChange={(e) => setCustomerName(e.target.value)}
                     placeholder="Walk-in Customer"
                   />
+                </div>
+
+                {/* Backdate Sale Option */}
+                <div>
+                  <Label>Sale Date (Optional - for missed sales)</Label>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="outline"
+                        className={cn(
+                          "w-full justify-start text-left font-normal",
+                          !saleDate && "text-muted-foreground"
+                        )}
+                      >
+                        <CalendarIcon className="mr-2 h-4 w-4" />
+                        {saleDate ? format(saleDate, "PPP") : <span>Today (default)</span>}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0" align="start">
+                      <Calendar
+                        mode="single"
+                        selected={saleDate}
+                        onSelect={setSaleDate}
+                        disabled={(date) => date > new Date()}
+                        initialFocus
+                        className={cn("p-3 pointer-events-auto")}
+                      />
+                      {saleDate && (
+                        <div className="p-2 border-t">
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            className="w-full"
+                            onClick={() => setSaleDate(undefined)}
+                          >
+                            Clear (use today)
+                          </Button>
+                        </div>
+                      )}
+                    </PopoverContent>
+                  </Popover>
+                  {saleDate && (
+                    <p className="text-xs text-orange-600 mt-1">
+                      This sale will be recorded as {format(saleDate, "PPPP")}
+                    </p>
+                  )}
                 </div>
 
                 <div>
