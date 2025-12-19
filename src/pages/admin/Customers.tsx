@@ -71,6 +71,7 @@ const Customers = () => {
   const [paymentAmount, setPaymentAmount] = useState('');
   const [paymentMethod, setPaymentMethod] = useState('cash');
   const [paymentNotes, setPaymentNotes] = useState('');
+  const [paymentDate, setPaymentDate] = useState(new Date().toISOString().split('T')[0]);
   const [paymentHistory, setPaymentHistory] = useState<CreditPayment[]>([]);
 
   useEffect(() => {
@@ -129,6 +130,7 @@ const Customers = () => {
     setPaymentAmount('');
     setPaymentMethod('cash');
     setPaymentNotes('');
+    setPaymentDate(new Date().toISOString().split('T')[0]);
     await fetchPaymentHistory(creditSale.id);
     setPaymentDialogOpen(true);
   };
@@ -188,11 +190,12 @@ const Customers = () => {
     setLoading(true);
 
     try {
-      // Record payment
+      // Record payment with custom date
       await supabase.from('credit_payments').insert({
         credit_sale_id: selectedCreditSale.id,
         amount,
         payment_method: paymentMethod,
+        payment_date: paymentDate,
         received_by: user?.id,
         notes: paymentNotes || null
       });
@@ -465,6 +468,15 @@ const Customers = () => {
                     <SelectItem value="bank_transfer">Bank Transfer</SelectItem>
                   </SelectContent>
                 </Select>
+              </div>
+
+              <div>
+                <Label>Payment Date</Label>
+                <Input
+                  type="date"
+                  value={paymentDate}
+                  onChange={(e) => setPaymentDate(e.target.value)}
+                />
               </div>
 
               <div>
