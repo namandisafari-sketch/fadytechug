@@ -75,19 +75,22 @@ const Reports = () => {
     const endStr = format(endDate, 'yyyy-MM-dd');
 
     try {
-      // Fetch sales
+      // Fetch sales - exclude deleted and credit sales
       const { data: salesData } = await supabase
         .from('sales')
-        .select('total, created_at')
+        .select('total, created_at, payment_method')
+        .is('deleted_at', null)
+        .neq('payment_method', 'credit')
         .gte('created_at', startStr)
         .lte('created_at', endStr + 'T23:59:59');
 
       const totalSales = salesData?.reduce((sum, s) => sum + Number(s.total), 0) || 0;
 
-      // Fetch refunds
+      // Fetch refunds - exclude deleted
       const { data: refundsData } = await supabase
         .from('refunds')
         .select('amount, created_at')
+        .is('deleted_at', null)
         .gte('created_at', startStr)
         .lte('created_at', endStr + 'T23:59:59');
 
@@ -169,6 +172,8 @@ const Reports = () => {
         const { data: mSales } = await supabase
           .from('sales')
           .select('total')
+          .is('deleted_at', null)
+          .neq('payment_method', 'credit')
           .gte('created_at', monthStartStr)
           .lte('created_at', monthEndStr + 'T23:59:59');
 
