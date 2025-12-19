@@ -216,7 +216,7 @@ const PointOfSale = () => {
       const saleData: any = {
         receipt_number: receiptNumber,
         customer_id: selectedCustomerId || null,
-        customer_name: selectedCustomer?.name || customerName || 'Walk-in Customer',
+        customer_name: selectedCustomer?.name || customerName || 'Walk In',
         subtotal,
         discount: discountAmount,
         total,
