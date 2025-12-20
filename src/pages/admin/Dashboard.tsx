@@ -141,18 +141,15 @@ const Dashboard = () => {
 
   const statCards = [
     {
-      title: `${dateLabel} Net Cash`,
-      value: formatCurrency(stats.todayCashSales),
-      subtitle: `${stats.todayTransactions} transactions (after expenses)`,
+      title: `${dateLabel} Total Sales`,
+      value: formatCurrency(stats.todaySales),
+      subtitle: `${stats.todayTransactions} transactions`,
       icon: DollarSign,
-      color: 'text-green-500'
-    },
-    {
-      title: `${dateLabel} Credit Sales`,
-      value: formatCurrency(stats.todayCreditSales),
-      subtitle: 'Sold on credit',
-      icon: CreditCard,
-      color: 'text-yellow-500'
+      color: 'text-green-500',
+      badges: [
+        { label: 'Cash', value: formatCurrency(stats.todayCashSales), variant: 'default' as const },
+        { label: 'Credit', value: formatCurrency(stats.todayCreditSales), variant: 'secondary' as const, highlight: stats.todayCreditSales > 0 }
+      ]
     },
     {
       title: 'Total Products',
@@ -211,7 +208,7 @@ const Dashboard = () => {
         </div>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         {statCards.map((stat) => (
           <Card key={stat.title}>
             <CardHeader className="flex flex-row items-center justify-between pb-2">
@@ -227,6 +224,22 @@ const Dashboard = () => {
               <p className="text-xs text-muted-foreground mt-1">
                 {stat.subtitle}
               </p>
+              {stat.badges && (
+                <div className="flex flex-wrap gap-1 mt-2">
+                  {stat.badges.map((badge) => (
+                    <Badge 
+                      key={badge.label} 
+                      variant={badge.variant}
+                      className={cn(
+                        "text-xs",
+                        badge.highlight && "bg-yellow-500/20 text-yellow-700 border-yellow-500/50"
+                      )}
+                    >
+                      {badge.label}: {badge.value}
+                    </Badge>
+                  ))}
+                </div>
+              )}
             </CardContent>
           </Card>
         ))}
