@@ -264,54 +264,54 @@ const Reports = () => {
         {/* Income Statement */}
         <TabsContent value="income" className="space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <Card>
+            <Card className="overflow-hidden">
               <CardContent className="pt-6">
                 <div className="flex items-center gap-3">
-                  <div className="p-2 bg-green-100 rounded-lg">
+                  <div className="p-2 bg-green-100 rounded-lg flex-shrink-0">
                     <TrendingUp className="h-5 w-5 text-green-600" />
                   </div>
-                  <div>
+                  <div className="min-w-0 flex-1">
                     <p className="text-sm text-muted-foreground">Revenue</p>
-                    <p className="text-xl font-bold text-green-600">{formatCurrency(financialData.sales)}</p>
+                    <p className="text-xl font-bold text-green-600 truncate">{formatCurrency(financialData.sales)}</p>
                   </div>
                 </div>
               </CardContent>
             </Card>
-            <Card>
+            <Card className="overflow-hidden">
               <CardContent className="pt-6">
                 <div className="flex items-center gap-3">
-                  <div className="p-2 bg-red-100 rounded-lg">
+                  <div className="p-2 bg-red-100 rounded-lg flex-shrink-0">
                     <TrendingDown className="h-5 w-5 text-red-600" />
                   </div>
-                  <div>
+                  <div className="min-w-0 flex-1">
                     <p className="text-sm text-muted-foreground">Refunds</p>
-                    <p className="text-xl font-bold text-red-600">-{formatCurrency(financialData.refunds)}</p>
+                    <p className="text-xl font-bold text-red-600 truncate">-{formatCurrency(financialData.refunds)}</p>
                   </div>
                 </div>
               </CardContent>
             </Card>
-            <Card>
+            <Card className="overflow-hidden">
               <CardContent className="pt-6">
                 <div className="flex items-center gap-3">
-                  <div className="p-2 bg-orange-100 rounded-lg">
+                  <div className="p-2 bg-orange-100 rounded-lg flex-shrink-0">
                     <DollarSign className="h-5 w-5 text-orange-600" />
                   </div>
-                  <div>
+                  <div className="min-w-0 flex-1">
                     <p className="text-sm text-muted-foreground">Expenses</p>
-                    <p className="text-xl font-bold text-orange-600">-{formatCurrency(financialData.expenses)}</p>
+                    <p className="text-xl font-bold text-orange-600 truncate">-{formatCurrency(financialData.expenses)}</p>
                   </div>
                 </div>
               </CardContent>
             </Card>
-            <Card className={financialData.netIncome >= 0 ? 'border-green-500' : 'border-red-500'}>
+            <Card className={`overflow-hidden ${financialData.netIncome >= 0 ? 'border-green-500' : 'border-red-500'}`}>
               <CardContent className="pt-6">
                 <div className="flex items-center gap-3">
-                  <div className={`p-2 rounded-lg ${financialData.netIncome >= 0 ? 'bg-green-100' : 'bg-red-100'}`}>
+                  <div className={`p-2 rounded-lg flex-shrink-0 ${financialData.netIncome >= 0 ? 'bg-green-100' : 'bg-red-100'}`}>
                     <FileText className={`h-5 w-5 ${financialData.netIncome >= 0 ? 'text-green-600' : 'text-red-600'}`} />
                   </div>
-                  <div>
+                  <div className="min-w-0 flex-1">
                     <p className="text-sm text-muted-foreground">Net Income</p>
-                    <p className={`text-xl font-bold ${financialData.netIncome >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                    <p className={`text-xl font-bold truncate ${financialData.netIncome >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                       {formatCurrency(financialData.netIncome)}
                     </p>
                   </div>
