@@ -12,7 +12,21 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
-import { Receipt, Search, Eye, Printer, DollarSign, TrendingUp, RotateCcw, Ban, ScanLine, Trash2, ArchiveRestore, Archive, CreditCard } from 'lucide-react';
+import {
+  Receipt,
+  Search,
+  Eye,
+  Printer,
+  DollarSign,
+  TrendingUp,
+  RotateCcw,
+  Ban,
+  ScanLine,
+  Trash2,
+  ArchiveRestore,
+  Archive,
+  CreditCard,
+} from 'lucide-react';
 import { formatCurrency } from '@/lib/currency';
 import BarcodeScanner from '@/components/BarcodeScanner';
 
@@ -73,10 +87,25 @@ const Sales = () => {
   const [loading, setLoading] = useState(true);
   const [isAdmin, setIsAdmin] = useState(false);
   const [previousDayCreditPayments, setPreviousDayCreditPayments] = useState(0);
-  
+  const [expensesTotal, setExpensesTotal] = useState(0);
+
+  const KAMPALA_OFFSET_MS = 3 * 60 * 60 * 1000;
+
+  const getKampalaDateString = (date: Date) =>
+    new Date(date.getTime() + KAMPALA_OFFSET_MS).toISOString().split('T')[0];
+
+  const getKampalaDayRangeIso = (dateStr: string) => {
+    // dateStr format: YYYY-MM-DD
+    const [y, m, d] = dateStr.split('-').map(Number);
+    const startUtcMs = Date.UTC(y, m - 1, d, 0, 0, 0) - KAMPALA_OFFSET_MS;
+    const startIso = new Date(startUtcMs).toISOString();
+    const endIso = new Date(startUtcMs + 24 * 60 * 60 * 1000 - 1).toISOString();
+    return { startIso, endIso };
+  };
+
   // Scanner state
   const [scannerOpen, setScannerOpen] = useState(false);
-  
+
   // Refund state
   const [refundDialogOpen, setRefundDialogOpen] = useState(false);
   const [refundSale, setRefundSale] = useState<Sale | null>(null);
@@ -90,6 +119,7 @@ const Sales = () => {
     fetchSales();
     fetchDeletedSales();
     fetchRefunds();
+    fetchExpensesTotal();
     checkAdminStatus();
     fetchPreviousDayCreditPayments();
   }, [dateFilter]);
@@ -114,14 +144,8 @@ const Sales = () => {
       .order('created_at', { ascending: false });
 
     if (dateFilter) {
-      const startDate = new Date(dateFilter);
-      startDate.setHours(0, 0, 0, 0);
-      const endDate = new Date(dateFilter);
-      endDate.setHours(23, 59, 59, 999);
-      
-      query = query
-        .gte('created_at', startDate.toISOString())
-        .lte('created_at', endDate.toISOString());
+      const { startIso, endIso } = getKampalaDayRangeIso(dateFilter);
+      query = query.gte('created_at', startIso).lte('created_at', endIso);
     }
 
     const { data, error } = await query.limit(100);
@@ -167,26 +191,43 @@ const Sales = () => {
   };
 
   const fetchRefunds = async () => {
-    const { data, error } = await supabase
+    let query = supabase
       .from('refunds')
       .select('*, sales(customer_name)')
       .is('deleted_at', null)
       .order('created_at', { ascending: false });
 
+    if (dateFilter) {
+      const { startIso, endIso } = getKampalaDayRangeIso(dateFilter);
+      query = query.gte('created_at', startIso).lte('created_at', endIso);
+    }
+
+    const { data, error } = await query;
     if (!error) setRefunds(data || []);
   };
 
+  const fetchExpensesTotal = async () => {
+    const day = dateFilter || getKampalaDateString(new Date());
+    const { data } = await supabase.from('expenses').select('amount').eq('expense_date', day);
+    const total = data?.reduce((sum, e) => sum + e.amount, 0) || 0;
+    setExpensesTotal(total);
+  };
+
   const fetchPreviousDayCreditPayments = async () => {
-    // Get the date to use (if dateFilter is set, use the day before that, otherwise yesterday)
-    const targetDate = dateFilter ? new Date(dateFilter) : new Date();
-    targetDate.setDate(targetDate.getDate() - 1);
-    const prevDayStr = targetDate.toISOString().split('T')[0];
+    const day = dateFilter || getKampalaDateString(new Date());
+
+    const [y, m, d] = day.split('-').map(Number);
+    const prevDay = new Date(Date.UTC(y, m - 1, d));
+    prevDay.setUTCDate(prevDay.getUTCDate() - 1);
+    const prevDayStr = getKampalaDateString(prevDay);
+
+    const { startIso, endIso } = getKampalaDayRangeIso(prevDayStr);
 
     const { data } = await supabase
       .from('credit_payments')
       .select('amount, payment_method')
-      .gte('payment_date', `${prevDayStr}T00:00:00`)
-      .lte('payment_date', `${prevDayStr}T23:59:59`)
+      .gte('payment_date', startIso)
+      .lte('payment_date', endIso)
       .eq('payment_method', 'cash');
 
     const total = data?.reduce((sum, p) => sum + p.amount, 0) || 0;
@@ -521,23 +562,36 @@ const Sales = () => {
     r.receipt_number.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  const todaySales = sales.filter(s => {
-    const saleDate = new Date(s.created_at).toDateString();
-    return saleDate === new Date().toDateString();
-  });
+  const statsDay = dateFilter || getKampalaDateString(new Date());
+  const { startIso: statsStartIso, endIso: statsEndIso } = getKampalaDayRangeIso(statsDay);
 
-  // Calculate cash sales only (excluding credits)
-  const todayCashSales = todaySales.filter(s => s.payment_method !== 'credit');
-  const todayCashTotal = todayCashSales.reduce((sum, s) => sum + s.total, 0);
-  const todayCreditTotal = todaySales.filter(s => s.payment_method === 'credit').reduce((sum, s) => sum + s.total, 0);
-  
-  // For filtered view
-  const cashSales = sales.filter(s => s.payment_method !== 'credit');
-  const creditSales = sales.filter(s => s.payment_method === 'credit');
+  const daySales = sales.filter((s) => s.created_at >= statsStartIso && s.created_at <= statsEndIso);
+
+  // Cash received for the day:
+  // - all non-credit sales
+  // - PLUS credit sales that are already fully paid (balance = 0)
+  const dayPaidCreditSales = daySales.filter(
+    (s) => s.payment_method === 'credit' && s.credit_balance !== undefined && s.credit_balance === 0,
+  );
+  const dayCashReceivedSales = daySales.filter((s) => s.payment_method !== 'credit').concat(dayPaidCreditSales);
+
+  const dayCashReceivedTotal = dayCashReceivedSales.reduce((sum, s) => sum + s.total, 0);
+  const dayCreditOutstandingTotal = daySales
+    .filter((s) => s.payment_method === 'credit' && (s.credit_balance ?? 0) > 0)
+    .reduce((sum, s) => sum + s.total, 0);
+
+  const statsRefunds = refunds.filter((r) => r.created_at >= statsStartIso && r.created_at <= statsEndIso);
+  const dayRefundsTotal = statsRefunds.reduce((sum, r) => sum + r.amount, 0);
+
+  const dayNetCashTotal = dayCashReceivedTotal - dayRefundsTotal - expensesTotal;
+
+  // For filtered view (table showing)
+  const cashSales = sales.filter((s) => s.payment_method !== 'credit' || s.credit_balance === 0);
+  const creditSales = sales.filter((s) => s.payment_method === 'credit' && (s.credit_balance ?? 0) > 0);
   const totalCashSales = cashSales.reduce((sum, s) => sum + s.total, 0);
   const totalCreditSales = creditSales.reduce((sum, s) => sum + s.total, 0);
-  
-  const totalRefunds = refunds.reduce((sum, r) => sum + r.amount, 0);
+
+  const totalRefunds = dateFilter ? dayRefundsTotal : refunds.reduce((sum, r) => sum + r.amount, 0);
   const refundAmount = calculateRefundAmount();
 
   return (
@@ -556,8 +610,10 @@ const Sales = () => {
                 <DollarSign className="h-6 w-6 text-green-600" />
               </div>
               <div>
-                <p className="text-sm text-muted-foreground">Today's Cash Sales</p>
-                <p className="text-2xl font-bold">{formatCurrency(todayCashTotal)}</p>
+                <p className="text-sm text-muted-foreground">
+                  {dateFilter ? 'Selected Day Cash Sales' : "Today's Cash Sales"}
+                </p>
+                <p className="text-2xl font-bold">{formatCurrency(dayCashReceivedTotal)}</p>
               </div>
             </div>
           </CardContent>
@@ -570,8 +626,10 @@ const Sales = () => {
                 <CreditCard className="h-6 w-6 text-yellow-600" />
               </div>
               <div>
-                <p className="text-sm text-muted-foreground">Today's Credits</p>
-                <p className="text-2xl font-bold text-yellow-600">{formatCurrency(todayCreditTotal)}</p>
+                <p className="text-sm text-muted-foreground">
+                  {dateFilter ? 'Selected Day Credit Outstanding' : "Today's Credit Outstanding"}
+                </p>
+                <p className="text-2xl font-bold text-yellow-600">{formatCurrency(dayCreditOutstandingTotal)}</p>
               </div>
             </div>
           </CardContent>
@@ -584,8 +642,10 @@ const Sales = () => {
                 <Receipt className="h-6 w-6 text-blue-600" />
               </div>
               <div>
-                <p className="text-sm text-muted-foreground">Today's Transactions</p>
-                <p className="text-2xl font-bold">{todaySales.length}</p>
+                <p className="text-sm text-muted-foreground">
+                  {dateFilter ? 'Selected Day Transactions' : "Today's Transactions"}
+                </p>
+                <p className="text-2xl font-bold">{daySales.length}</p>
               </div>
             </div>
           </CardContent>
@@ -598,8 +658,8 @@ const Sales = () => {
                 <TrendingUp className="h-6 w-6 text-purple-600" />
               </div>
               <div>
-                <p className="text-sm text-muted-foreground">Cash Total (Showing)</p>
-                <p className="text-2xl font-bold">{formatCurrency(totalCashSales)}</p>
+                <p className="text-sm text-muted-foreground">Net Cash (After Refunds & Expenses)</p>
+                <p className="text-2xl font-bold">{formatCurrency(dayNetCashTotal)}</p>
               </div>
             </div>
           </CardContent>
@@ -711,22 +771,12 @@ const Sales = () => {
                       <TableCell>{sale.customer_name || 'Walk-in'}</TableCell>
                       <TableCell>
                         <div className="flex flex-col gap-1">
-                          <Badge 
-                            variant={sale.payment_method === 'credit' ? 'secondary' : 'outline'} 
-                            className={sale.payment_method === 'credit' ? 'bg-yellow-500/20 text-yellow-700 border-yellow-500/50' : ''}
-                          >
+                          <Badge variant={sale.payment_method === 'credit' ? 'secondary' : 'outline'}>
                             {sale.payment_method.replace('_', ' ')}
                           </Badge>
                           {sale.payment_method === 'credit' && sale.credit_balance !== undefined && (
-                            <Badge 
-                              variant="outline" 
-                              className={sale.credit_balance > 0 
-                                ? 'bg-red-500/10 text-red-600 border-red-500/30 text-xs' 
-                                : 'bg-green-500/10 text-green-600 border-green-500/30 text-xs'}
-                            >
-                              {sale.credit_balance > 0 
-                                ? `Bal: ${formatCurrency(sale.credit_balance)}` 
-                                : 'Paid'}
+                            <Badge variant={sale.credit_balance > 0 ? 'destructive' : 'default'} className="text-xs">
+                              {sale.credit_balance > 0 ? `Bal: ${formatCurrency(sale.credit_balance)}` : 'Paid'}
                             </Badge>
                           )}
                         </div>
