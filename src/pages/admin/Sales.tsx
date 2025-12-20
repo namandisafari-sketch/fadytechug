@@ -28,6 +28,8 @@ interface Sale {
   change_given: number;
   created_at: string;
   deleted_at: string | null;
+  credit_balance?: number;
+  credit_status?: string;
 }
 
 interface SaleItem {
@@ -127,7 +129,28 @@ const Sales = () => {
     if (error) {
       toast({ title: 'Error', description: 'Failed to fetch sales', variant: 'destructive' });
     } else {
-      setSales(data || []);
+      // Fetch credit sale info for credit sales
+      const salesData = data || [];
+      const creditSaleIds = salesData.filter(s => s.payment_method === 'credit').map(s => s.id);
+      
+      if (creditSaleIds.length > 0) {
+        const { data: creditData } = await supabase
+          .from('credit_sales')
+          .select('sale_id, balance, status')
+          .in('sale_id', creditSaleIds);
+        
+        const creditMap = new Map(creditData?.map(c => [c.sale_id, { balance: c.balance, status: c.status }]) || []);
+        
+        const enrichedSales = salesData.map(sale => ({
+          ...sale,
+          credit_balance: creditMap.get(sale.id)?.balance,
+          credit_status: creditMap.get(sale.id)?.status
+        }));
+        
+        setSales(enrichedSales);
+      } else {
+        setSales(salesData);
+      }
     }
     setLoading(false);
   };
@@ -687,9 +710,26 @@ const Sales = () => {
                       <TableCell>{new Date(sale.created_at).toLocaleString()}</TableCell>
                       <TableCell>{sale.customer_name || 'Walk-in'}</TableCell>
                       <TableCell>
-                        <Badge variant="outline" className="capitalize">
-                          {sale.payment_method.replace('_', ' ')}
-                        </Badge>
+                        <div className="flex flex-col gap-1">
+                          <Badge 
+                            variant={sale.payment_method === 'credit' ? 'secondary' : 'outline'} 
+                            className={sale.payment_method === 'credit' ? 'bg-yellow-500/20 text-yellow-700 border-yellow-500/50' : ''}
+                          >
+                            {sale.payment_method.replace('_', ' ')}
+                          </Badge>
+                          {sale.payment_method === 'credit' && sale.credit_balance !== undefined && (
+                            <Badge 
+                              variant="outline" 
+                              className={sale.credit_balance > 0 
+                                ? 'bg-red-500/10 text-red-600 border-red-500/30 text-xs' 
+                                : 'bg-green-500/10 text-green-600 border-green-500/30 text-xs'}
+                            >
+                              {sale.credit_balance > 0 
+                                ? `Bal: ${formatCurrency(sale.credit_balance)}` 
+                                : 'Paid'}
+                            </Badge>
+                          )}
+                        </div>
                       </TableCell>
                       <TableCell className="text-right font-medium">{formatCurrency(sale.total)}</TableCell>
                       <TableCell className="text-right">
