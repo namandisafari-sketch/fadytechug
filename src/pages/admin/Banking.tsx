@@ -5,12 +5,19 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
-import { Building2, Plus, Wallet, DollarSign, ArrowUpRight, ArrowDownRight } from 'lucide-react';
+import { Building2, Plus, Wallet, ArrowUpRight, ArrowDownRight, XCircle, CheckCircle } from 'lucide-react';
 import { formatCurrency } from '@/lib/currency';
+
+interface BankSettings {
+  bankName: string;
+  accountNumber: string;
+  accountName: string;
+  autoDepositOnClose: boolean;
+}
 
 interface BankDeposit {
   id: string;
@@ -41,12 +48,15 @@ const Banking = () => {
   const [deposits, setDeposits] = useState<BankDeposit[]>([]);
   const [cashRegister, setCashRegister] = useState<CashRegister | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [closeShiftDialogOpen, setCloseShiftDialogOpen] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [closingShift, setClosingShift] = useState(false);
   const [bankBalance, setBankBalance] = useState(0);
   const [cashExpenses, setCashExpenses] = useState(0);
   const [bankExpenses, setBankExpenses] = useState(0);
   const [cashSupplierPayments, setCashSupplierPayments] = useState(0);
   const [bankSupplierPayments, setBankSupplierPayments] = useState(0);
+  const [bankSettings, setBankSettings] = useState<BankSettings | null>(null);
 
   // Form state
   const [amount, setAmount] = useState('');
@@ -60,7 +70,20 @@ const Banking = () => {
     fetchDeposits();
     fetchTodayCashRegister();
     fetchBalances();
+    fetchBankSettings();
   }, []);
+
+  const fetchBankSettings = async () => {
+    const { data } = await supabase
+      .from('site_settings')
+      .select('value')
+      .eq('key', 'bank_settings')
+      .maybeSingle();
+    
+    if (data?.value && typeof data.value === 'object') {
+      setBankSettings(data.value as unknown as BankSettings);
+    }
+  };
 
   const fetchDeposits = async () => {
     const { data, error } = await supabase
@@ -266,6 +289,71 @@ const Banking = () => {
     setNotes('');
   };
 
+  const closeShift = async () => {
+    if (!bankSettings?.bankName) {
+      toast({ 
+        title: 'Bank not configured', 
+        description: 'Please configure your bank account in Settings before closing shift', 
+        variant: 'destructive' 
+      });
+      return;
+    }
+
+    if (!cashRegister || cashRegister.closing_balance <= 0) {
+      toast({ 
+        title: 'Cannot close shift', 
+        description: 'No cash balance available to deposit', 
+        variant: 'destructive' 
+      });
+      return;
+    }
+
+    setClosingShift(true);
+    try {
+      const today = new Date().toISOString().split('T')[0];
+      
+      // Create bank deposit for the closing balance
+      const { error } = await supabase
+        .from('bank_deposits')
+        .insert({
+          amount: cashRegister.closing_balance,
+          bank_name: bankSettings.bankName,
+          account_number: bankSettings.accountNumber || null,
+          deposit_date: today,
+          reference_number: `SHIFT-${today}`,
+          notes: `Automatic deposit from shift close - ${new Date().toLocaleString()}`,
+          deposited_by: user?.id
+        });
+
+      if (error) throw error;
+
+      // Update cash register with the deposit
+      await supabase
+        .from('cash_register')
+        .update({
+          total_deposits: (cashRegister.total_deposits || 0) + cashRegister.closing_balance,
+          closing_balance: 0,
+          closed_by: user?.id
+        })
+        .eq('id', cashRegister.id);
+
+      toast({ 
+        title: 'Shift closed successfully', 
+        description: `${formatCurrency(cashRegister.closing_balance)} deposited to ${bankSettings.bankName}` 
+      });
+      
+      setCloseShiftDialogOpen(false);
+      fetchDeposits();
+      fetchTodayCashRegister();
+      fetchBalances();
+
+    } catch (error: any) {
+      toast({ title: 'Error', description: error.message, variant: 'destructive' });
+    } finally {
+      setClosingShift(false);
+    }
+  };
+
   const totalDeposited = deposits.reduce((sum, d) => sum + d.amount, 0);
 
   return (
@@ -275,13 +363,24 @@ const Banking = () => {
           <h1 className="text-3xl font-bold text-foreground">Banking</h1>
           <p className="text-muted-foreground">Manage bank deposits and cash flow</p>
         </div>
-        <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-          <DialogTrigger asChild>
-            <Button>
-              <Plus className="h-4 w-4 mr-2" />
-              Record Deposit
+        <div className="flex gap-2">
+          {bankSettings?.bankName && cashRegister && cashRegister.closing_balance > 0 && (
+            <Button 
+              variant="default" 
+              onClick={() => setCloseShiftDialogOpen(true)}
+              className="bg-green-600 hover:bg-green-700"
+            >
+              <CheckCircle className="h-4 w-4 mr-2" />
+              Close Shift
             </Button>
-          </DialogTrigger>
+          )}
+          <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+            <DialogTrigger asChild>
+              <Button variant="outline">
+                <Plus className="h-4 w-4 mr-2" />
+                Record Deposit
+              </Button>
+            </DialogTrigger>
           <DialogContent>
             <DialogHeader>
               <DialogTitle>Record Bank Deposit</DialogTitle>
@@ -348,8 +447,74 @@ const Banking = () => {
               </Button>
             </div>
           </DialogContent>
-        </Dialog>
+          </Dialog>
+        </div>
       </div>
+
+      {/* Close Shift Dialog */}
+      <Dialog open={closeShiftDialogOpen} onOpenChange={setCloseShiftDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <CheckCircle className="h-5 w-5 text-green-600" />
+              Close Shift & Deposit to Bank
+            </DialogTitle>
+            <DialogDescription>
+              This will deposit the full cash register balance to your configured bank account.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4 py-4">
+            <div className="p-4 bg-primary/10 rounded-lg">
+              <p className="text-sm text-muted-foreground">Amount to deposit</p>
+              <p className="text-2xl font-bold text-primary">{formatCurrency(cashRegister?.closing_balance || 0)}</p>
+            </div>
+            
+            <div className="space-y-2">
+              <div className="flex justify-between text-sm">
+                <span className="text-muted-foreground">Bank Name</span>
+                <span className="font-medium">{bankSettings?.bankName}</span>
+              </div>
+              {bankSettings?.accountNumber && (
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Account Number</span>
+                  <span className="font-medium">{bankSettings.accountNumber}</span>
+                </div>
+              )}
+              {bankSettings?.accountName && (
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Account Name</span>
+                  <span className="font-medium">{bankSettings.accountName}</span>
+                </div>
+              )}
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setCloseShiftDialogOpen(false)} disabled={closingShift}>
+              <XCircle className="h-4 w-4 mr-2" />
+              Cancel
+            </Button>
+            <Button onClick={closeShift} disabled={closingShift} className="bg-green-600 hover:bg-green-700">
+              <CheckCircle className="h-4 w-4 mr-2" />
+              {closingShift ? 'Processing...' : 'Confirm & Deposit'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Bank Not Configured Warning */}
+      {!bankSettings?.bankName && (
+        <div className="p-4 bg-yellow-50 dark:bg-yellow-950/30 border border-yellow-200 dark:border-yellow-800 rounded-lg flex items-start gap-3">
+          <Building2 className="h-5 w-5 text-yellow-600 mt-0.5" />
+          <div>
+            <p className="font-medium text-yellow-800 dark:text-yellow-200">Bank account not configured</p>
+            <p className="text-sm text-yellow-700 dark:text-yellow-300 mt-1">
+              Configure your bank account in Settings → Bank to enable automatic deposits when closing shifts.
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Today's Cash Summary */}
       {cashRegister && (

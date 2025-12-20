@@ -19,7 +19,8 @@ import {
   Save,
   Users,
   AlertTriangle,
-  Loader2
+  Loader2,
+  Building2
 } from 'lucide-react';
 import {
   AlertDialog,
@@ -67,6 +68,14 @@ interface PrinterSettings {
   openCashDrawer: boolean;
 }
 
+interface BankSettings {
+  [key: string]: string | boolean;
+  bankName: string;
+  accountNumber: string;
+  accountName: string;
+  autoDepositOnClose: boolean;
+}
+
 const defaultReceiptSettings: ReceiptSettings = {
   businessName: 'FADY TECHNOLOGIES',
   tagline: 'Network Equipment Store',
@@ -87,6 +96,13 @@ const defaultPrinterSettings: PrinterSettings = {
   openCashDrawer: false,
 };
 
+const defaultBankSettings: BankSettings = {
+  bankName: '',
+  accountNumber: '',
+  accountName: '',
+  autoDepositOnClose: true,
+};
+
 const Settings = () => {
   const { isAdmin, user } = useAuth();
   const { toast } = useToast();
@@ -95,7 +111,9 @@ const Settings = () => {
   // Receipt Settings
   const [receiptSettings, setReceiptSettings] = useState<ReceiptSettings>(defaultReceiptSettings);
   const [printerSettings, setPrinterSettings] = useState<PrinterSettings>(defaultPrinterSettings);
+  const [bankSettings, setBankSettings] = useState<BankSettings>(defaultBankSettings);
   const [savingReceipt, setSavingReceipt] = useState(false);
+  const [savingBank, setSavingBank] = useState(false);
   
   // Storage Locations
   const [locations, setLocations] = useState<StorageLocation[]>([]);
@@ -133,6 +151,16 @@ const Settings = () => {
     
     if (printerData?.value) {
       setPrinterSettings({ ...defaultPrinterSettings, ...(printerData.value as object) });
+    }
+
+    const { data: bankData } = await supabase
+      .from('site_settings')
+      .select('value')
+      .eq('key', 'bank_settings')
+      .maybeSingle();
+    
+    if (bankData?.value) {
+      setBankSettings({ ...defaultBankSettings, ...(bankData.value as object) });
     }
   };
 
@@ -188,6 +216,34 @@ const Settings = () => {
       toast({ title: 'Error', description: error.message, variant: 'destructive' });
     } finally {
       setSavingReceipt(false);
+    }
+  };
+
+  const saveBankSettings = async () => {
+    setSavingBank(true);
+    try {
+      const { data: existing } = await supabase
+        .from('site_settings')
+        .select('id')
+        .eq('key', 'bank_settings')
+        .maybeSingle();
+
+      if (existing) {
+        await supabase
+          .from('site_settings')
+          .update({ value: bankSettings as Json, updated_by: user?.id })
+          .eq('key', 'bank_settings');
+      } else {
+        await supabase
+          .from('site_settings')
+          .insert([{ key: 'bank_settings', value: bankSettings as Json, updated_by: user?.id }]);
+      }
+
+      toast({ title: 'Success', description: 'Bank settings saved successfully' });
+    } catch (error: any) {
+      toast({ title: 'Error', description: error.message, variant: 'destructive' });
+    } finally {
+      setSavingBank(false);
     }
   };
 
@@ -258,7 +314,7 @@ const Settings = () => {
       </div>
 
       <Tabs defaultValue="account" className="space-y-4">
-        <TabsList className="grid w-full grid-cols-5">
+        <TabsList className="grid w-full grid-cols-6">
           <TabsTrigger value="account" className="gap-2">
             <SettingsIcon className="h-4 w-4" />
             <span className="hidden sm:inline">Account</span>
@@ -270,6 +326,10 @@ const Settings = () => {
           <TabsTrigger value="printer" className="gap-2">
             <Printer className="h-4 w-4" />
             <span className="hidden sm:inline">Printer</span>
+          </TabsTrigger>
+          <TabsTrigger value="bank" className="gap-2">
+            <Building2 className="h-4 w-4" />
+            <span className="hidden sm:inline">Bank</span>
           </TabsTrigger>
           <TabsTrigger value="locations" className="gap-2">
             <MapPin className="h-4 w-4" />
@@ -530,6 +590,75 @@ const Settings = () => {
           <Button onClick={saveReceiptSettings} disabled={savingReceipt} className="w-full">
             <Save className="h-4 w-4 mr-2" />
             {savingReceipt ? 'Saving...' : 'Save All Settings'}
+          </Button>
+        </TabsContent>
+
+        {/* Bank Settings Tab */}
+        <TabsContent value="bank" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Building2 className="h-5 w-5" />
+                Bank Account Settings
+              </CardTitle>
+              <CardDescription>Configure your bank account for automatic deposits when closing shifts</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Bank Name *</Label>
+                  <Input 
+                    value={bankSettings.bankName}
+                    onChange={(e) => setBankSettings({ ...bankSettings, bankName: e.target.value })}
+                    placeholder="e.g., Stanbic Bank, DFCU, Centenary Bank"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Account Number</Label>
+                  <Input 
+                    value={bankSettings.accountNumber}
+                    onChange={(e) => setBankSettings({ ...bankSettings, accountNumber: e.target.value })}
+                    placeholder="Enter account number"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label>Account Name</Label>
+                <Input 
+                  value={bankSettings.accountName}
+                  onChange={(e) => setBankSettings({ ...bankSettings, accountName: e.target.value })}
+                  placeholder="Account holder name"
+                />
+              </div>
+
+              <div className="flex items-center justify-between p-4 border rounded-lg bg-primary/5">
+                <div>
+                  <Label htmlFor="autoDeposit" className="cursor-pointer font-medium">Auto Deposit on Shift Close</Label>
+                  <p className="text-sm text-muted-foreground">
+                    Automatically record a bank deposit when closing a shift. The full cash register balance will be deposited.
+                  </p>
+                </div>
+                <Switch 
+                  id="autoDeposit"
+                  checked={bankSettings.autoDepositOnClose}
+                  onCheckedChange={(checked) => setBankSettings({ ...bankSettings, autoDepositOnClose: checked })}
+                />
+              </div>
+
+              {!bankSettings.bankName && (
+                <div className="p-4 bg-yellow-50 dark:bg-yellow-950/30 border border-yellow-200 dark:border-yellow-800 rounded-lg">
+                  <p className="text-sm text-yellow-800 dark:text-yellow-200">
+                    Please configure your bank name to enable automatic deposits when closing shifts.
+                  </p>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          <Button onClick={saveBankSettings} disabled={savingBank} className="w-full">
+            <Save className="h-4 w-4 mr-2" />
+            {savingBank ? 'Saving...' : 'Save Bank Settings'}
           </Button>
         </TabsContent>
 
