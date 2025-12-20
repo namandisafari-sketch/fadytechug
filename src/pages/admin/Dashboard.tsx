@@ -61,23 +61,32 @@ const Dashboard = () => {
       endOfDay.setHours(23, 59, 59, 999);
       const dateStr = format(selectedDate, 'yyyy-MM-dd');
       
-      const [productsRes, inquiriesRes, customersRes, salesRes, allCreditSalesRes, expensesRes] = await Promise.all([
+      const [productsRes, inquiriesRes, customersRes, salesRes, expensesRes] = await Promise.all([
         supabase.from('products').select('id, is_active'),
         supabase.from('inquiries').select('id, status'),
         supabase.from('customers').select('id'),
         supabase.from('sales').select('id, total, payment_method, created_at')
           .gte('created_at', startOfDay.toISOString())
           .lte('created_at', endOfDay.toISOString()),
-        supabase.from('credit_sales')
-          .select('sale_id, customer_id, balance, customers(name)'),
         supabase.from('expenses')
           .select('amount')
           .eq('expense_date', dateStr)
       ]);
 
-      // Build a map of sale_id -> credit balance
+      // Get sale IDs for credit sales on the selected date
+      const creditSaleIds = salesRes.data?.filter(s => s.payment_method === 'credit').map(s => s.id) || [];
+      
+      // Fetch credit sales data only for the selected date's sales
+      const creditSalesForDate = creditSaleIds.length > 0 
+        ? await supabase
+            .from('credit_sales')
+            .select('sale_id, customer_id, balance, customers(name)')
+            .in('sale_id', creditSaleIds)
+        : { data: [] };
+
+      // Build a map of sale_id -> credit balance for the selected date
       const creditBalanceMap = new Map<string, number>();
-      allCreditSalesRes.data?.forEach((c: any) => {
+      creditSalesForDate.data?.forEach((c: any) => {
         creditBalanceMap.set(c.sale_id, c.balance);
       });
 
@@ -101,8 +110,8 @@ const Dashboard = () => {
       // Total expenses for the day
       const todayExpenses = expensesRes.data?.reduce((sum, e) => sum + e.amount, 0) || 0;
       
-      // Outstanding credit (all uncollected balances with balance > 0)
-      const outstandingCreditData = allCreditSalesRes.data?.filter((c: any) => c.balance > 0) || [];
+      // Outstanding credit for the selected date (uncollected balances with balance > 0)
+      const outstandingCreditData = creditSalesForDate.data?.filter((c: any) => c.balance > 0) || [];
       const outstandingCredit = outstandingCreditData.reduce((sum: number, c: any) => sum + c.balance, 0);
       
       // Group by customer for top balances (only those with balance > 0)
