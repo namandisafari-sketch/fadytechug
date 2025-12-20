@@ -60,8 +60,9 @@ const Dashboard = () => {
         startOfDay.setHours(0, 0, 0, 0);
         const endOfDay = new Date(selectedDate);
         endOfDay.setHours(23, 59, 59, 999);
+        const dateStr = selectedDate.toISOString().split('T')[0];
         
-        const [productsRes, inquiriesRes, customersRes, salesRes, creditRes] = await Promise.all([
+        const [productsRes, inquiriesRes, customersRes, salesRes, creditRes, expensesRes] = await Promise.all([
           supabase.from('products').select('id, is_active'),
           supabase.from('inquiries').select('id, status'),
           supabase.from('customers').select('id'),
@@ -70,14 +71,20 @@ const Dashboard = () => {
             .lte('created_at', endOfDay.toISOString()),
           supabase.from('credit_sales')
             .select('customer_id, balance, customers(name)')
-            .gt('balance', 0)
+            .gt('balance', 0),
+          supabase.from('expenses')
+            .select('amount')
+            .eq('expense_date', dateStr)
+            .eq('payment_source', 'cash_register')
         ]);
 
         const todaySalesTotal = salesRes.data?.reduce((sum, s) => sum + s.total, 0) || 0;
         
-        // Calculate cash sales (excluding credit)
-        const todayCashSales = salesRes.data?.filter(s => s.payment_method !== 'credit')
+        // Calculate cash sales (excluding credit) minus expenses
+        const grossCashSales = salesRes.data?.filter(s => s.payment_method !== 'credit')
           .reduce((sum, s) => sum + s.total, 0) || 0;
+        const totalExpenses = expensesRes.data?.reduce((sum, e) => sum + e.amount, 0) || 0;
+        const todayCashSales = grossCashSales - totalExpenses;
         
         // Calculate credit sales for the selected date
         const todayCreditSales = salesRes.data?.filter(s => s.payment_method === 'credit')
@@ -133,9 +140,9 @@ const Dashboard = () => {
 
   const statCards = [
     {
-      title: `${dateLabel} Cash Sales`,
+      title: `${dateLabel} Net Cash`,
       value: formatCurrency(stats.todayCashSales),
-      subtitle: `${stats.todayTransactions} transactions`,
+      subtitle: `${stats.todayTransactions} transactions (after expenses)`,
       icon: DollarSign,
       color: 'text-green-500'
     },
