@@ -110,24 +110,26 @@ const PointOfSale = () => {
     // Use local date string (avoid timezone shifting from toISOString)
     const dateStr = format(targetDate, 'yyyy-MM-dd');
     
-    // Get the day's sales EXCLUDING credit sales (use created_at which may be backdated)
+    // Get the day's CASH sales only (credit/card/mobile_money/bank_transfer are not physical drawer cash)
+    // NOTE: we filter by created_at range for the selected date.
     const { data: salesData } = await supabase
       .from('sales')
       .select('total, payment_method')
       .gte('created_at', `${dateStr}T00:00:00`)
       .lte('created_at', `${dateStr}T23:59:59`);
 
-    const totalSales = salesData?.filter(s => s.payment_method !== 'credit')
-      .reduce((sum, s) => sum + s.total, 0) || 0;
+    const totalCashSales =
+      salesData?.filter((s) => s.payment_method === 'cash').reduce((sum, s) => sum + s.total, 0) || 0;
 
-    // Get credit payments made on this date (payment_date)
+    // Get CASH credit payments received on this date (these add physical cash to the drawer)
     const { data: creditPaymentsData } = await supabase
       .from('credit_payments')
-      .select('amount')
+      .select('amount, payment_method')
       .gte('payment_date', `${dateStr}T00:00:00`)
-      .lte('payment_date', `${dateStr}T23:59:59`);
+      .lte('payment_date', `${dateStr}T23:59:59`)
+      .eq('payment_method', 'cash');
 
-    const totalCreditPayments = creditPaymentsData?.reduce((sum, p) => sum + p.amount, 0) || 0;
+    const totalCashCreditPayments = creditPaymentsData?.reduce((sum, p) => sum + p.amount, 0) || 0;
 
     // Get the day's refunds
     const { data: refundsData } = await supabase
@@ -169,10 +171,11 @@ const PointOfSale = () => {
 
     const openingBalance = previousDayRegister?.closing_balance || 0;
     
-    // Calculate physical cash in drawer for the shift:
-    // opening_balance + cash_sales + credit_payments_received - refunds - cash_expenses - cash_supplier_payments
-    // NOTE: We do NOT subtract previous deposits - this represents actual cash in drawer
-    const balance = openingBalance + totalSales + totalCreditPayments - totalRefunds - totalExpenses - totalSupplierPayments;
+    // Physical cash in drawer for the shift (cash-only):
+    // opening_balance + cash_sales + cash_credit_payments - refunds - cash_expenses - cash_supplier_payments
+    // NOTE: we do NOT subtract deposits or any historical totals.
+    const balance =
+      openingBalance + totalCashSales + totalCashCreditPayments - totalRefunds - totalExpenses - totalSupplierPayments;
     setCashRegisterBalance(balance);
   };
 
