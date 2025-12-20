@@ -14,9 +14,11 @@ interface Stats {
   newInquiries: number;
   totalCustomers: number;
   todaySales: number;
+  todayCashSales: number;
   todayTransactions: number;
   outstandingCredit: number;
   creditCustomers: number;
+  todayCreditSales: number;
 }
 
 interface CreditCustomer {
@@ -34,9 +36,11 @@ const Dashboard = () => {
     newInquiries: 0,
     totalCustomers: 0,
     todaySales: 0,
+    todayCashSales: 0,
     todayTransactions: 0,
     outstandingCredit: 0,
-    creditCustomers: 0
+    creditCustomers: 0,
+    todayCreditSales: 0
   });
   const [creditCustomers, setCreditCustomers] = useState<CreditCustomer[]>([]);
   const [loading, setLoading] = useState(true);
@@ -50,7 +54,7 @@ const Dashboard = () => {
           supabase.from('products').select('id, is_active'),
           supabase.from('inquiries').select('id, status'),
           supabase.from('customers').select('id'),
-          supabase.from('sales').select('total, created_at')
+          supabase.from('sales').select('total, payment_method, created_at')
             .gte('created_at', `${today}T00:00:00`)
             .lte('created_at', `${today}T23:59:59`),
           supabase.from('credit_sales')
@@ -59,6 +63,14 @@ const Dashboard = () => {
         ]);
 
         const todaySalesTotal = salesRes.data?.reduce((sum, s) => sum + s.total, 0) || 0;
+        
+        // Calculate cash sales (excluding credit)
+        const todayCashSales = salesRes.data?.filter(s => s.payment_method !== 'credit')
+          .reduce((sum, s) => sum + s.total, 0) || 0;
+        
+        // Calculate credit sales for today
+        const todayCreditSales = salesRes.data?.filter(s => s.payment_method === 'credit')
+          .reduce((sum, s) => sum + s.total, 0) || 0;
         
         // Calculate outstanding credit
         const outstandingCredit = creditRes.data?.reduce((sum, c) => sum + c.balance, 0) || 0;
@@ -89,6 +101,8 @@ const Dashboard = () => {
           newInquiries: inquiriesRes.data?.filter(i => i.status === 'new').length || 0,
           totalCustomers: customersRes.data?.length || 0,
           todaySales: todaySalesTotal,
+          todayCashSales,
+          todayCreditSales,
           todayTransactions: salesRes.data?.length || 0,
           outstandingCredit,
           creditCustomers: Object.keys(customerBalances).length
@@ -105,11 +119,18 @@ const Dashboard = () => {
 
   const statCards = [
     {
-      title: "Today's Sales",
-      value: formatCurrency(stats.todaySales),
+      title: "Today's Cash Sales",
+      value: formatCurrency(stats.todayCashSales),
       subtitle: `${stats.todayTransactions} transactions`,
       icon: DollarSign,
       color: 'text-green-500'
+    },
+    {
+      title: "Today's Credit Sales",
+      value: formatCurrency(stats.todayCreditSales),
+      subtitle: 'Sold on credit today',
+      icon: CreditCard,
+      color: 'text-yellow-500'
     },
     {
       title: 'Total Products',
@@ -141,7 +162,7 @@ const Dashboard = () => {
         <p className="text-muted-foreground">Welcome to Fady Technologies Admin</p>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
         {statCards.map((stat) => (
           <Card key={stat.title}>
             <CardHeader className="flex flex-row items-center justify-between pb-2">

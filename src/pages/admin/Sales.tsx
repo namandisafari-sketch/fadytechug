@@ -12,7 +12,7 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
-import { Receipt, Search, Eye, Printer, DollarSign, TrendingUp, RotateCcw, Ban, ScanLine, Trash2, ArchiveRestore, Archive } from 'lucide-react';
+import { Receipt, Search, Eye, Printer, DollarSign, TrendingUp, RotateCcw, Ban, ScanLine, Trash2, ArchiveRestore, Archive, CreditCard } from 'lucide-react';
 import { formatCurrency } from '@/lib/currency';
 import BarcodeScanner from '@/components/BarcodeScanner';
 
@@ -70,6 +70,7 @@ const Sales = () => {
   const [dateFilter, setDateFilter] = useState('');
   const [loading, setLoading] = useState(true);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [previousDayCreditPayments, setPreviousDayCreditPayments] = useState(0);
   
   // Scanner state
   const [scannerOpen, setScannerOpen] = useState(false);
@@ -88,6 +89,7 @@ const Sales = () => {
     fetchDeletedSales();
     fetchRefunds();
     checkAdminStatus();
+    fetchPreviousDayCreditPayments();
   }, [dateFilter]);
 
   const checkAdminStatus = async () => {
@@ -149,6 +151,23 @@ const Sales = () => {
       .order('created_at', { ascending: false });
 
     if (!error) setRefunds(data || []);
+  };
+
+  const fetchPreviousDayCreditPayments = async () => {
+    // Get the date to use (if dateFilter is set, use the day before that, otherwise yesterday)
+    const targetDate = dateFilter ? new Date(dateFilter) : new Date();
+    targetDate.setDate(targetDate.getDate() - 1);
+    const prevDayStr = targetDate.toISOString().split('T')[0];
+
+    const { data } = await supabase
+      .from('credit_payments')
+      .select('amount, payment_method')
+      .gte('payment_date', `${prevDayStr}T00:00:00`)
+      .lte('payment_date', `${prevDayStr}T23:59:59`)
+      .eq('payment_method', 'cash');
+
+    const total = data?.reduce((sum, p) => sum + p.amount, 0) || 0;
+    setPreviousDayCreditPayments(total);
   };
 
   const viewSaleDetails = async (sale: Sale) => {
@@ -484,8 +503,17 @@ const Sales = () => {
     return saleDate === new Date().toDateString();
   });
 
-  const todayTotal = todaySales.reduce((sum, s) => sum + s.total, 0);
-  const totalSales = sales.reduce((sum, s) => sum + s.total, 0);
+  // Calculate cash sales only (excluding credits)
+  const todayCashSales = todaySales.filter(s => s.payment_method !== 'credit');
+  const todayCashTotal = todayCashSales.reduce((sum, s) => sum + s.total, 0);
+  const todayCreditTotal = todaySales.filter(s => s.payment_method === 'credit').reduce((sum, s) => sum + s.total, 0);
+  
+  // For filtered view
+  const cashSales = sales.filter(s => s.payment_method !== 'credit');
+  const creditSales = sales.filter(s => s.payment_method === 'credit');
+  const totalCashSales = cashSales.reduce((sum, s) => sum + s.total, 0);
+  const totalCreditSales = creditSales.reduce((sum, s) => sum + s.total, 0);
+  
   const totalRefunds = refunds.reduce((sum, r) => sum + r.amount, 0);
   const refundAmount = calculateRefundAmount();
 
@@ -497,7 +525,7 @@ const Sales = () => {
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
         <Card>
           <CardContent className="pt-6">
             <div className="flex items-center gap-4">
@@ -505,8 +533,22 @@ const Sales = () => {
                 <DollarSign className="h-6 w-6 text-green-600" />
               </div>
               <div>
-                <p className="text-sm text-muted-foreground">Today's Sales</p>
-                <p className="text-2xl font-bold">{formatCurrency(todayTotal)}</p>
+                <p className="text-sm text-muted-foreground">Today's Cash Sales</p>
+                <p className="text-2xl font-bold">{formatCurrency(todayCashTotal)}</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardContent className="pt-6">
+            <div className="flex items-center gap-4">
+              <div className="p-3 bg-yellow-100 dark:bg-yellow-900/30 rounded-lg">
+                <CreditCard className="h-6 w-6 text-yellow-600" />
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground">Today's Credits</p>
+                <p className="text-2xl font-bold text-yellow-600">{formatCurrency(todayCreditTotal)}</p>
               </div>
             </div>
           </CardContent>
@@ -533,8 +575,8 @@ const Sales = () => {
                 <TrendingUp className="h-6 w-6 text-purple-600" />
               </div>
               <div>
-                <p className="text-sm text-muted-foreground">Total (Showing)</p>
-                <p className="text-2xl font-bold">{formatCurrency(totalSales)}</p>
+                <p className="text-sm text-muted-foreground">Cash Total (Showing)</p>
+                <p className="text-2xl font-bold">{formatCurrency(totalCashSales)}</p>
               </div>
             </div>
           </CardContent>
@@ -554,6 +596,23 @@ const Sales = () => {
           </CardContent>
         </Card>
       </div>
+
+      {/* Previous Day Credit Payments Notice */}
+      {previousDayCreditPayments > 0 && (
+        <Card className="border-blue-500/50 bg-blue-500/5">
+          <CardContent className="pt-6">
+            <div className="flex items-center gap-4">
+              <div className="p-3 bg-blue-100 dark:bg-blue-900/30 rounded-lg">
+                <CreditCard className="h-6 w-6 text-blue-600" />
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground">Credit Payments from Previous Day (Added to Today's Cash)</p>
+                <p className="text-2xl font-bold text-blue-600">{formatCurrency(previousDayCreditPayments)}</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Filters */}
       <div className="flex flex-col sm:flex-row gap-4">
