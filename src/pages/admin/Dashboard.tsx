@@ -60,7 +60,8 @@ const Dashboard = () => {
         startOfDay.setHours(0, 0, 0, 0);
         const endOfDay = new Date(selectedDate);
         endOfDay.setHours(23, 59, 59, 999);
-        const dateStr = selectedDate.toISOString().split('T')[0];
+        // Use local date string (avoid timezone shifting from toISOString)
+        const dateStr = format(selectedDate, 'yyyy-MM-dd');
         
         const [productsRes, inquiriesRes, customersRes, salesRes, creditRes, expensesRes] = await Promise.all([
           supabase.from('products').select('id, is_active'),

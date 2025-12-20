@@ -107,7 +107,8 @@ const PointOfSale = () => {
 
   const fetchCashRegisterBalance = async (forDate?: Date) => {
     const targetDate = forDate || new Date();
-    const dateStr = targetDate.toISOString().split('T')[0];
+    // Use local date string (avoid timezone shifting from toISOString)
+    const dateStr = format(targetDate, 'yyyy-MM-dd');
     
     // Get the day's sales EXCLUDING credit sales (use created_at which may be backdated)
     const { data: salesData } = await supabase
@@ -166,7 +167,7 @@ const PointOfSale = () => {
     // Get previous day's closing balance (opening balance for target date)
     const previousDay = new Date(targetDate);
     previousDay.setDate(previousDay.getDate() - 1);
-    const previousDayStr = previousDay.toISOString().split('T')[0];
+    const previousDayStr = format(previousDay, 'yyyy-MM-dd');
 
     const { data: previousDayRegister } = await supabase
       .from('cash_register')
@@ -482,7 +483,7 @@ const PointOfSale = () => {
     setClosingShift(true);
     try {
       const targetDate = endDayDate || new Date();
-      const dateStr = targetDate.toISOString().split('T')[0];
+      const dateStr = format(targetDate, 'yyyy-MM-dd');
       
       // Create bank deposit for the closing balance
       const { error: depositError } = await supabase
