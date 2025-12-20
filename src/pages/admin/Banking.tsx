@@ -179,6 +179,14 @@ const Banking = () => {
 
     const totalSupplierPayments = supplierPaymentsData?.reduce((sum, p) => sum + p.amount, 0) || 0;
 
+    // Get deposits already made for this date - these are LOCKED and cannot be used again
+    const { data: depositsData } = await supabase
+      .from('bank_deposits')
+      .select('amount')
+      .eq('deposit_date', dateStr);
+
+    const totalDepositsForDay = depositsData?.reduce((sum, d) => sum + d.amount, 0) || 0;
+
     // Get or create cash register entry
     const { data: existingRegister } = await supabase
       .from('cash_register')
@@ -186,7 +194,7 @@ const Banking = () => {
       .eq('date', dateStr)
       .maybeSingle();
 
-    // Opening balance = previous day's closing (shift carry), otherwise 0
+    // Opening balance = previous day's closing (after deposits), otherwise 0
     const previousDay = new Date(`${dateStr}T00:00:00`);
     previousDay.setDate(previousDay.getDate() - 1);
     const previousDayStr = previousDay.toISOString().split('T')[0];
@@ -200,10 +208,10 @@ const Banking = () => {
     const openingBalance = existingRegister?.opening_balance ?? previousDayRegister?.closing_balance ?? 0;
 
     // Drawer cash for the day (what should be bankable):
-    // opening + cash sales - refunds - cash expenses - cash supplier payments
-    // NOTE: Credit payments are excluded from bankable amount as per accounting rules.
+    // opening + cash sales - refunds - cash expenses - cash supplier payments - deposits already made
+    // CRITICAL: Deposits are subtracted because once deposited, that money is LOCKED in the bank
     const closing =
-      openingBalance + totalCashSales - totalRefunds - totalExpenses - totalSupplierPayments;
+      openingBalance + totalCashSales - totalRefunds - totalExpenses - totalSupplierPayments - totalDepositsForDay;
 
     if (existingRegister) {
       await supabase
@@ -213,7 +221,7 @@ const Banking = () => {
           total_sales: totalCashSales,
           total_refunds: totalRefunds,
           total_expenses: totalExpenses,
-          total_deposits: existingRegister.total_deposits || 0,
+          total_deposits: totalDepositsForDay,
           closing_balance: closing,
         })
         .eq('id', existingRegister.id);
@@ -224,6 +232,7 @@ const Banking = () => {
         total_sales: totalCashSales,
         total_refunds: totalRefunds,
         total_expenses: totalExpenses,
+        total_deposits: totalDepositsForDay,
         closing_balance: closing,
       });
     } else {
@@ -235,7 +244,7 @@ const Banking = () => {
           total_sales: totalCashSales,
           total_refunds: totalRefunds,
           total_expenses: totalExpenses,
-          total_deposits: 0,
+          total_deposits: totalDepositsForDay,
           closing_balance: closing,
         })
         .select()

@@ -154,6 +154,14 @@ const PointOfSale = () => {
 
     const totalSupplierPayments = supplierPaymentsData?.reduce((sum, p) => sum + p.amount, 0) || 0;
 
+    // Get deposits already made for this date - these are LOCKED and cannot be used again
+    const { data: depositsData } = await supabase
+      .from('bank_deposits')
+      .select('amount')
+      .eq('deposit_date', dateStr);
+
+    const totalDepositsForDay = depositsData?.reduce((sum, d) => sum + d.amount, 0) || 0;
+
     // Get previous day's closing balance (opening balance for target date)
     const previousDay = new Date(targetDate);
     previousDay.setDate(previousDay.getDate() - 1);
@@ -168,10 +176,10 @@ const PointOfSale = () => {
     const openingBalance = previousDayRegister?.closing_balance || 0;
     
     // Physical cash in drawer for the shift (bankable amount):
-    // opening_balance + cash_sales - refunds - cash_expenses - cash_supplier_payments
-    // NOTE: Credit payments are excluded from this calculation as per accounting rules.
+    // opening_balance + cash_sales - refunds - cash_expenses - cash_supplier_payments - deposits
+    // CRITICAL: Deposits are subtracted because once deposited, that money is LOCKED in the bank
     const balance =
-      openingBalance + totalCashSales - totalRefunds - totalExpenses - totalSupplierPayments;
+      openingBalance + totalCashSales - totalRefunds - totalExpenses - totalSupplierPayments - totalDepositsForDay;
     setCashRegisterBalance(balance);
   };
 
