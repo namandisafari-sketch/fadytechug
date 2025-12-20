@@ -136,12 +136,15 @@ const Banking = () => {
   const fetchTodayCashRegister = async (forDateStr?: string): Promise<number> => {
     const dateStr = forDateStr || new Date().toISOString().split('T')[0];
 
+    const startTs = `${dateStr}T00:00:00+03:00`;
+    const endTs = `${dateStr}T23:59:59+03:00`;
+
     // CASH sales only (drawer cash). Ignore credit/card/mobile_money/bank transfers for drawer-banking.
     const { data: salesData } = await supabase
       .from('sales')
       .select('total, payment_method')
-      .gte('created_at', `${dateStr}T00:00:00`)
-      .lte('created_at', `${dateStr}T23:59:59`);
+      .gte('created_at', startTs)
+      .lte('created_at', endTs);
 
     const totalCashSales =
       salesData?.filter((s) => s.payment_method === 'cash').reduce((sum, s) => sum + s.total, 0) || 0;
@@ -150,8 +153,8 @@ const Banking = () => {
     const { data: creditPaymentsData } = await supabase
       .from('credit_payments')
       .select('amount, payment_method')
-      .gte('payment_date', `${dateStr}T00:00:00`)
-      .lte('payment_date', `${dateStr}T23:59:59`)
+      .gte('payment_date', startTs)
+      .lte('payment_date', endTs)
       .eq('payment_method', 'cash');
 
     const totalCashCreditPayments = creditPaymentsData?.reduce((sum, p) => sum + p.amount, 0) || 0;
@@ -160,8 +163,8 @@ const Banking = () => {
     const { data: refundsData } = await supabase
       .from('refunds')
       .select('amount')
-      .gte('created_at', `${dateStr}T00:00:00`)
-      .lte('created_at', `${dateStr}T23:59:59`);
+      .gte('created_at', startTs)
+      .lte('created_at', endTs);
 
     const totalRefunds = refundsData?.reduce((sum, r) => sum + r.amount, 0) || 0;
 
