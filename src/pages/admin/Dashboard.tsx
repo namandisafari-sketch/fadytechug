@@ -54,15 +54,20 @@ const Dashboard = () => {
     const fetchStats = async () => {
       try {
         setLoading(true);
-        const dateStr = format(selectedDate, 'yyyy-MM-dd');
+        
+        // Create start and end of day in local timezone, then convert to ISO
+        const startOfDay = new Date(selectedDate);
+        startOfDay.setHours(0, 0, 0, 0);
+        const endOfDay = new Date(selectedDate);
+        endOfDay.setHours(23, 59, 59, 999);
         
         const [productsRes, inquiriesRes, customersRes, salesRes, creditRes] = await Promise.all([
           supabase.from('products').select('id, is_active'),
           supabase.from('inquiries').select('id, status'),
           supabase.from('customers').select('id'),
           supabase.from('sales').select('total, payment_method, created_at')
-            .gte('created_at', `${dateStr}T00:00:00`)
-            .lte('created_at', `${dateStr}T23:59:59`),
+            .gte('created_at', startOfDay.toISOString())
+            .lte('created_at', endOfDay.toISOString()),
           supabase.from('credit_sales')
             .select('customer_id, balance, customers(name)')
             .gt('balance', 0)
