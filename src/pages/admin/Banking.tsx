@@ -133,128 +133,122 @@ const Banking = () => {
     setBankBalance(totalDeposited - bankExp - bankSupp);
   };
 
-  const fetchTodayCashRegister = async () => {
-    const today = new Date().toISOString().split('T')[0];
-    
-    // Get today's sales EXCLUDING credit sales (payment_method = 'credit')
+  const fetchTodayCashRegister = async (forDateStr?: string): Promise<number> => {
+    const dateStr = forDateStr || new Date().toISOString().split('T')[0];
+
+    // CASH sales only (drawer cash). Ignore credit/card/mobile_money/bank transfers for drawer-banking.
     const { data: salesData } = await supabase
       .from('sales')
       .select('total, payment_method')
-      .gte('created_at', `${today}T00:00:00`)
-      .lte('created_at', `${today}T23:59:59`);
+      .gte('created_at', `${dateStr}T00:00:00`)
+      .lte('created_at', `${dateStr}T23:59:59`);
 
-    // Only count non-credit sales (cash, card, mobile_money, bank_transfer)
-    const totalSales = salesData?.filter(s => s.payment_method !== 'credit')
-      .reduce((sum, s) => sum + s.total, 0) || 0;
+    const totalCashSales =
+      salesData?.filter((s) => s.payment_method === 'cash').reduce((sum, s) => sum + s.total, 0) || 0;
 
-    // Get today's refunds
+    // Cash credit payments received on this date (these are physical cash in drawer)
+    const { data: creditPaymentsData } = await supabase
+      .from('credit_payments')
+      .select('amount, payment_method')
+      .gte('payment_date', `${dateStr}T00:00:00`)
+      .lte('payment_date', `${dateStr}T23:59:59`)
+      .eq('payment_method', 'cash');
+
+    const totalCashCreditPayments = creditPaymentsData?.reduce((sum, p) => sum + p.amount, 0) || 0;
+
+    // Refunds reduce drawer cash (we treat all refunds as cash impact)
     const { data: refundsData } = await supabase
       .from('refunds')
       .select('amount')
-      .gte('created_at', `${today}T00:00:00`)
-      .lte('created_at', `${today}T23:59:59`);
+      .gte('created_at', `${dateStr}T00:00:00`)
+      .lte('created_at', `${dateStr}T23:59:59`);
 
     const totalRefunds = refundsData?.reduce((sum, r) => sum + r.amount, 0) || 0;
 
-    // Get today's expenses paid from cash register only
+    // Cash register expenses only
     const { data: expensesData } = await supabase
       .from('expenses')
       .select('amount')
-      .eq('expense_date', today)
+      .eq('expense_date', dateStr)
       .eq('payment_source', 'cash_register');
 
     const totalExpenses = expensesData?.reduce((sum, e) => sum + e.amount, 0) || 0;
 
-    // Get today's supplier payments from cash register
+    // Cash register supplier payments only
     const { data: supplierPaymentsData } = await supabase
       .from('supplier_payments')
       .select('amount')
-      .eq('payment_date', today)
+      .eq('payment_date', dateStr)
       .eq('payment_source', 'cash_register');
 
     const totalSupplierPayments = supplierPaymentsData?.reduce((sum, p) => sum + p.amount, 0) || 0;
-
-    // Get today's deposits
-    const { data: depositsData } = await supabase
-      .from('bank_deposits')
-      .select('amount')
-      .eq('deposit_date', today);
-
-    const totalDeposits = depositsData?.reduce((sum, d) => sum + d.amount, 0) || 0;
-
-    // Get yesterday's credit payments (cash payments received for credit sales from previous day)
-    const yesterday = new Date();
-    yesterday.setDate(yesterday.getDate() - 1);
-    const yesterdayStr = yesterday.toISOString().split('T')[0];
-
-    const { data: yesterdayCreditPayments } = await supabase
-      .from('credit_payments')
-      .select('amount, payment_method')
-      .gte('payment_date', `${yesterdayStr}T00:00:00`)
-      .lte('payment_date', `${yesterdayStr}T23:59:59`)
-      .eq('payment_method', 'cash');
-
-    const creditPaymentsFromYesterday = yesterdayCreditPayments?.reduce((sum, p) => sum + p.amount, 0) || 0;
 
     // Get or create cash register entry
     const { data: existingRegister } = await supabase
       .from('cash_register')
       .select('*')
-      .eq('date', today)
+      .eq('date', dateStr)
       .maybeSingle();
 
+    // Opening balance = previous day's closing (shift carry), otherwise 0
+    const previousDay = new Date(`${dateStr}T00:00:00`);
+    previousDay.setDate(previousDay.getDate() - 1);
+    const previousDayStr = previousDay.toISOString().split('T')[0];
+
+    const { data: previousDayRegister } = await supabase
+      .from('cash_register')
+      .select('closing_balance')
+      .eq('date', previousDayStr)
+      .maybeSingle();
+
+    const openingBalance = existingRegister?.opening_balance ?? previousDayRegister?.closing_balance ?? 0;
+
+    // Drawer cash for the day (what should be bankable):
+    // opening + cash sales + cash credit payments - refunds - cash expenses - cash supplier payments
+    // IMPORTANT: Do NOT subtract deposits here; deposits are an action taken *after* counting drawer cash.
+    const closing =
+      openingBalance + totalCashSales + totalCashCreditPayments - totalRefunds - totalExpenses - totalSupplierPayments;
+
     if (existingRegister) {
-      // Update with current totals
-      // closing = opening + cash sales - refunds - expenses - supplier payments - deposits + credit payments from yesterday
-      const closing = existingRegister.opening_balance + totalSales - totalRefunds - totalExpenses - totalSupplierPayments - totalDeposits + creditPaymentsFromYesterday;
-      
       await supabase
         .from('cash_register')
         .update({
-          total_sales: totalSales,
+          opening_balance: openingBalance,
+          total_sales: totalCashSales,
           total_refunds: totalRefunds,
           total_expenses: totalExpenses,
-          total_deposits: totalDeposits,
-          closing_balance: closing
+          total_deposits: existingRegister.total_deposits || 0,
+          closing_balance: closing,
         })
         .eq('id', existingRegister.id);
 
       setCashRegister({
         ...existingRegister,
-        total_sales: totalSales,
+        opening_balance: openingBalance,
+        total_sales: totalCashSales,
         total_refunds: totalRefunds,
         total_expenses: totalExpenses,
-        total_deposits: totalDeposits,
-        closing_balance: closing
+        closing_balance: closing,
       });
     } else {
-      // Get yesterday's closing balance
-      const { data: yesterdayRegister } = await supabase
-        .from('cash_register')
-        .select('closing_balance')
-        .eq('date', yesterdayStr)
-        .maybeSingle();
-
-      const openingBalance = yesterdayRegister?.closing_balance || 0;
-      // closing = opening + cash sales - refunds - expenses - supplier payments - deposits + credit payments from yesterday
-      const closing = openingBalance + totalSales - totalRefunds - totalExpenses - totalSupplierPayments - totalDeposits + creditPaymentsFromYesterday;
-
       const { data: newRegister, error } = await supabase
         .from('cash_register')
         .insert({
-          date: today,
+          date: dateStr,
           opening_balance: openingBalance,
-          total_sales: totalSales,
+          total_sales: totalCashSales,
           total_refunds: totalRefunds,
           total_expenses: totalExpenses,
-          total_deposits: totalDeposits,
-          closing_balance: closing
+          total_deposits: 0,
+          closing_balance: closing,
         })
         .select()
         .single();
 
       if (!error) setCashRegister(newRegister);
     }
+
+    return closing;
   };
 
   const recordDeposit = async () => {
@@ -388,7 +382,20 @@ const Banking = () => {
               Close Shift
             </Button>
           )}
-          <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+          <Dialog
+            open={dialogOpen}
+            onOpenChange={(open) => {
+              setDialogOpen(open);
+              if (open) {
+                const todayStr = new Date().toISOString().split('T')[0];
+                setDepositDate(todayStr);
+                void (async () => {
+                  const bankable = await fetchTodayCashRegister(todayStr);
+                  setAmount(bankable > 0 ? String(bankable) : '');
+                })();
+              }
+            }}
+          >
             <DialogTrigger asChild>
               <Button variant="outline">
                 <Plus className="h-4 w-4 mr-2" />
@@ -434,7 +441,14 @@ const Banking = () => {
                   <Input
                     type="date"
                     value={depositDate}
-                    onChange={(e) => setDepositDate(e.target.value)}
+                    onChange={(e) => {
+                      const nextDate = e.target.value;
+                      setDepositDate(nextDate);
+                      void (async () => {
+                        const bankable = await fetchTodayCashRegister(nextDate);
+                        setAmount(bankable > 0 ? String(bankable) : '');
+                      })();
+                    }}
                   />
                 </div>
                 <div>
