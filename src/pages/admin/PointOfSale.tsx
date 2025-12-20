@@ -124,15 +124,8 @@ const PointOfSale = () => {
     const totalCashSales =
       salesData?.filter((s) => s.payment_method === 'cash').reduce((sum, s) => sum + s.total, 0) || 0;
 
-    // Get CASH credit payments received on this date (these add physical cash to the drawer)
-    const { data: creditPaymentsData } = await supabase
-      .from('credit_payments')
-      .select('amount, payment_method')
-      .gte('payment_date', startTs)
-      .lte('payment_date', endTs)
-      .eq('payment_method', 'cash');
-
-    const totalCashCreditPayments = creditPaymentsData?.reduce((sum, p) => sum + p.amount, 0) || 0;
+    // NOTE: Credit payments are NOT included in bankable drawer cash.
+    // They are tracked separately and may be deposited independently.
 
     // Get the day's refunds
     const { data: refundsData } = await supabase
@@ -174,11 +167,11 @@ const PointOfSale = () => {
 
     const openingBalance = previousDayRegister?.closing_balance || 0;
     
-    // Physical cash in drawer for the shift (cash-only):
-    // opening_balance + cash_sales + cash_credit_payments - refunds - cash_expenses - cash_supplier_payments
-    // NOTE: we do NOT subtract deposits or any historical totals.
+    // Physical cash in drawer for the shift (bankable amount):
+    // opening_balance + cash_sales - refunds - cash_expenses - cash_supplier_payments
+    // NOTE: Credit payments are excluded from this calculation as per accounting rules.
     const balance =
-      openingBalance + totalCashSales + totalCashCreditPayments - totalRefunds - totalExpenses - totalSupplierPayments;
+      openingBalance + totalCashSales - totalRefunds - totalExpenses - totalSupplierPayments;
     setCashRegisterBalance(balance);
   };
 

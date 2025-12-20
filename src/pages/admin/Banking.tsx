@@ -149,17 +149,10 @@ const Banking = () => {
     const totalCashSales =
       salesData?.filter((s) => s.payment_method === 'cash').reduce((sum, s) => sum + s.total, 0) || 0;
 
-    // Cash credit payments received on this date (these are physical cash in drawer)
-    const { data: creditPaymentsData } = await supabase
-      .from('credit_payments')
-      .select('amount, payment_method')
-      .gte('payment_date', startTs)
-      .lte('payment_date', endTs)
-      .eq('payment_method', 'cash');
+    // NOTE: Credit payments are NOT included in bankable drawer cash.
+    // They are tracked separately.
 
-    const totalCashCreditPayments = creditPaymentsData?.reduce((sum, p) => sum + p.amount, 0) || 0;
-
-    // Refunds reduce drawer cash (we treat all refunds as cash impact)
+    // Refunds reduce drawer cash
     const { data: refundsData } = await supabase
       .from('refunds')
       .select('amount')
@@ -207,10 +200,10 @@ const Banking = () => {
     const openingBalance = existingRegister?.opening_balance ?? previousDayRegister?.closing_balance ?? 0;
 
     // Drawer cash for the day (what should be bankable):
-    // opening + cash sales + cash credit payments - refunds - cash expenses - cash supplier payments
-    // IMPORTANT: Do NOT subtract deposits here; deposits are an action taken *after* counting drawer cash.
+    // opening + cash sales - refunds - cash expenses - cash supplier payments
+    // NOTE: Credit payments are excluded from bankable amount as per accounting rules.
     const closing =
-      openingBalance + totalCashSales + totalCashCreditPayments - totalRefunds - totalExpenses - totalSupplierPayments;
+      openingBalance + totalCashSales - totalRefunds - totalExpenses - totalSupplierPayments;
 
     if (existingRegister) {
       await supabase
