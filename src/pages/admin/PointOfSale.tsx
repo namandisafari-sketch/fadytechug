@@ -8,9 +8,9 @@ import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
-import { Search, Plus, Minus, Trash2, ShoppingCart, Printer, Barcode, ScanLine, Edit2, CalendarIcon } from 'lucide-react';
+import { Search, Plus, Minus, Trash2, ShoppingCart, Printer, Barcode, ScanLine, Edit2, CalendarIcon, Power } from 'lucide-react';
 import fadyLogo from '@/assets/fady-logo.png';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { formatCurrency } from '@/lib/currency';
 import { QRCodeSVG } from 'qrcode.react';
 import { format } from 'date-fns';
@@ -39,6 +39,13 @@ interface Customer {
   email: string | null;
 }
 
+interface BankSettings {
+  bankName: string;
+  accountNumber: string;
+  accountName: string;
+  autoDepositOnClose: boolean;
+}
+
 const PointOfSale = () => {
   const { user } = useAuth();
   const { toast } = useToast();
@@ -59,6 +66,12 @@ const PointOfSale = () => {
   // Credit sale state
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [selectedCustomerId, setSelectedCustomerId] = useState<string>('');
+  
+  // End day state
+  const [endDayDialogOpen, setEndDayDialogOpen] = useState(false);
+  const [closingShift, setClosingShift] = useState(false);
+  const [bankSettings, setBankSettings] = useState<BankSettings | null>(null);
+  const [cashRegisterBalance, setCashRegisterBalance] = useState(0);
   const [creditNotes, setCreditNotes] = useState('');
   
   // Backdate sale state
@@ -67,6 +80,8 @@ const PointOfSale = () => {
   useEffect(() => {
     fetchProducts();
     fetchCustomers();
+    fetchBankSettings();
+    fetchCashRegisterBalance();
   }, []);
 
   const fetchCustomers = async () => {
@@ -75,6 +90,84 @@ const PointOfSale = () => {
       .select('id, name, phone, email')
       .order('name');
     if (data) setCustomers(data);
+  };
+
+  const fetchBankSettings = async () => {
+    const { data } = await supabase
+      .from('site_settings')
+      .select('value')
+      .eq('key', 'bank_settings')
+      .maybeSingle();
+    
+    if (data?.value && typeof data.value === 'object') {
+      setBankSettings(data.value as unknown as BankSettings);
+    }
+  };
+
+  const fetchCashRegisterBalance = async () => {
+    const today = new Date().toISOString().split('T')[0];
+    
+    // Get today's sales EXCLUDING credit sales
+    const { data: salesData } = await supabase
+      .from('sales')
+      .select('total, payment_method')
+      .gte('created_at', `${today}T00:00:00`)
+      .lte('created_at', `${today}T23:59:59`);
+
+    const totalSales = salesData?.filter(s => s.payment_method !== 'credit')
+      .reduce((sum, s) => sum + s.total, 0) || 0;
+
+    // Get today's refunds
+    const { data: refundsData } = await supabase
+      .from('refunds')
+      .select('amount')
+      .gte('created_at', `${today}T00:00:00`)
+      .lte('created_at', `${today}T23:59:59`);
+
+    const totalRefunds = refundsData?.reduce((sum, r) => sum + r.amount, 0) || 0;
+
+    // Get today's expenses from cash register
+    const { data: expensesData } = await supabase
+      .from('expenses')
+      .select('amount')
+      .eq('expense_date', today)
+      .eq('payment_source', 'cash_register');
+
+    const totalExpenses = expensesData?.reduce((sum, e) => sum + e.amount, 0) || 0;
+
+    // Get today's supplier payments from cash register
+    const { data: supplierPaymentsData } = await supabase
+      .from('supplier_payments')
+      .select('amount')
+      .eq('payment_date', today)
+      .eq('payment_source', 'cash_register');
+
+    const totalSupplierPayments = supplierPaymentsData?.reduce((sum, p) => sum + p.amount, 0) || 0;
+
+    // Get today's deposits
+    const { data: depositsData } = await supabase
+      .from('bank_deposits')
+      .select('amount')
+      .eq('deposit_date', today);
+
+    const totalDeposits = depositsData?.reduce((sum, d) => sum + d.amount, 0) || 0;
+
+    // Get yesterday's closing balance (opening balance for today)
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+    const yesterdayStr = yesterday.toISOString().split('T')[0];
+
+    const { data: yesterdayRegister } = await supabase
+      .from('cash_register')
+      .select('closing_balance')
+      .eq('date', yesterdayStr)
+      .maybeSingle();
+
+    const openingBalance = yesterdayRegister?.closing_balance || 0;
+    
+    // Calculate current balance
+    const balance = openingBalance + totalSales - totalRefunds - totalExpenses - totalSupplierPayments - totalDeposits;
+    setCashRegisterBalance(balance);
   };
 
   // Auto-focus barcode input when scanner mode is enabled
@@ -343,11 +436,128 @@ const PointOfSale = () => {
     window.print();
   };
 
+  const handleEndDay = async () => {
+    // Refresh the balance before showing dialog
+    await fetchCashRegisterBalance();
+    setEndDayDialogOpen(true);
+  };
+
+  const endDay = async () => {
+    if (!bankSettings?.bankName) {
+      toast({ 
+        title: 'Bank not configured', 
+        description: 'Please configure your bank account in Settings before closing shift', 
+        variant: 'destructive' 
+      });
+      return;
+    }
+
+    if (cashRegisterBalance <= 0) {
+      toast({ 
+        title: 'Cannot close shift', 
+        description: 'No cash balance available to deposit', 
+        variant: 'destructive' 
+      });
+      setEndDayDialogOpen(false);
+      return;
+    }
+
+    setClosingShift(true);
+    try {
+      const today = new Date().toISOString().split('T')[0];
+      
+      // Create bank deposit for the closing balance
+      const { error: depositError } = await supabase
+        .from('bank_deposits')
+        .insert({
+          amount: cashRegisterBalance,
+          bank_name: bankSettings.bankName,
+          account_number: bankSettings.accountNumber || null,
+          deposit_date: today,
+          reference_number: `SHIFT-${today}-${Date.now()}`,
+          notes: `End of day deposit - ${new Date().toLocaleString()}`,
+          deposited_by: user?.id
+        });
+
+      if (depositError) throw depositError;
+
+      // Get or create cash register entry
+      const { data: existingRegister } = await supabase
+        .from('cash_register')
+        .select('*')
+        .eq('date', today)
+        .maybeSingle();
+
+      if (existingRegister) {
+        // Update existing register
+        await supabase
+          .from('cash_register')
+          .update({
+            total_deposits: (existingRegister.total_deposits || 0) + cashRegisterBalance,
+            closing_balance: 0,
+            closed_by: user?.id
+          })
+          .eq('id', existingRegister.id);
+      } else {
+        // Create new register entry and mark as closed
+        const yesterday = new Date();
+        yesterday.setDate(yesterday.getDate() - 1);
+        const yesterdayStr = yesterday.toISOString().split('T')[0];
+
+        const { data: yesterdayRegister } = await supabase
+          .from('cash_register')
+          .select('closing_balance')
+          .eq('date', yesterdayStr)
+          .maybeSingle();
+
+        const openingBalance = yesterdayRegister?.closing_balance || 0;
+
+        await supabase
+          .from('cash_register')
+          .insert({
+            date: today,
+            opening_balance: openingBalance,
+            total_sales: 0,
+            total_refunds: 0,
+            total_expenses: 0,
+            total_deposits: cashRegisterBalance,
+            closing_balance: 0,
+            closed_by: user?.id
+          });
+      }
+
+      toast({ 
+        title: 'Day ended successfully', 
+        description: `${formatCurrency(cashRegisterBalance)} deposited to ${bankSettings.bankName}. See you tomorrow!` 
+      });
+      
+      setEndDayDialogOpen(false);
+      setCashRegisterBalance(0);
+
+    } catch (error: any) {
+      toast({ title: 'Error', description: error.message, variant: 'destructive' });
+    } finally {
+      setClosingShift(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold text-foreground">Point of Sale</h1>
-        <p className="text-muted-foreground">Process sales and generate receipts</p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold text-foreground">Point of Sale</h1>
+          <p className="text-muted-foreground">Process sales and generate receipts</p>
+        </div>
+        {bankSettings?.bankName && (
+          <Button 
+            variant="outline" 
+            onClick={handleEndDay}
+            className="gap-2 border-orange-500 text-orange-600 hover:bg-orange-50 dark:hover:bg-orange-950"
+          >
+            <Power className="h-4 w-4" />
+            End Day
+          </Button>
+        )}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -719,6 +929,68 @@ const PointOfSale = () => {
               </div>
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* End Day Dialog */}
+      <Dialog open={endDayDialogOpen} onOpenChange={setEndDayDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Power className="h-5 w-5 text-orange-600" />
+              End Day & Deposit to Bank
+            </DialogTitle>
+            <DialogDescription>
+              This will close today's shift and deposit the full cash register balance to your bank account.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4 py-4">
+            <div className="p-4 bg-orange-50 dark:bg-orange-950/30 rounded-lg border border-orange-200 dark:border-orange-800">
+              <p className="text-sm text-muted-foreground">Amount to deposit</p>
+              <p className="text-2xl font-bold text-orange-600">{formatCurrency(cashRegisterBalance)}</p>
+            </div>
+            
+            <div className="space-y-2">
+              <div className="flex justify-between text-sm">
+                <span className="text-muted-foreground">Bank Name</span>
+                <span className="font-medium">{bankSettings?.bankName}</span>
+              </div>
+              {bankSettings?.accountNumber && (
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Account Number</span>
+                  <span className="font-medium">{bankSettings.accountNumber}</span>
+                </div>
+              )}
+              {bankSettings?.accountName && (
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Account Name</span>
+                  <span className="font-medium">{bankSettings.accountName}</span>
+                </div>
+              )}
+            </div>
+
+            {cashRegisterBalance <= 0 && (
+              <div className="p-3 bg-yellow-50 dark:bg-yellow-950/30 border border-yellow-200 dark:border-yellow-800 rounded-lg">
+                <p className="text-sm text-yellow-800 dark:text-yellow-200">
+                  No cash balance available to deposit. Make some sales first!
+                </p>
+              </div>
+            )}
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEndDayDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button 
+              onClick={endDay} 
+              disabled={closingShift || cashRegisterBalance <= 0}
+              className="bg-orange-600 hover:bg-orange-700"
+            >
+              {closingShift ? 'Processing...' : 'End Day & Deposit'}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>
