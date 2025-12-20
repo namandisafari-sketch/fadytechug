@@ -136,14 +136,16 @@ const Banking = () => {
   const fetchTodayCashRegister = async () => {
     const today = new Date().toISOString().split('T')[0];
     
-    // Get today's sales
+    // Get today's sales EXCLUDING credit sales (payment_method = 'credit')
     const { data: salesData } = await supabase
       .from('sales')
-      .select('total')
+      .select('total, payment_method')
       .gte('created_at', `${today}T00:00:00`)
       .lte('created_at', `${today}T23:59:59`);
 
-    const totalSales = salesData?.reduce((sum, s) => sum + s.total, 0) || 0;
+    // Only count non-credit sales (cash, card, mobile_money, bank_transfer)
+    const totalSales = salesData?.filter(s => s.payment_method !== 'credit')
+      .reduce((sum, s) => sum + s.total, 0) || 0;
 
     // Get today's refunds
     const { data: refundsData } = await supabase
@@ -180,6 +182,20 @@ const Banking = () => {
 
     const totalDeposits = depositsData?.reduce((sum, d) => sum + d.amount, 0) || 0;
 
+    // Get yesterday's credit payments (cash payments received for credit sales from previous day)
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+    const yesterdayStr = yesterday.toISOString().split('T')[0];
+
+    const { data: yesterdayCreditPayments } = await supabase
+      .from('credit_payments')
+      .select('amount, payment_method')
+      .gte('payment_date', `${yesterdayStr}T00:00:00`)
+      .lte('payment_date', `${yesterdayStr}T23:59:59`)
+      .eq('payment_method', 'cash');
+
+    const creditPaymentsFromYesterday = yesterdayCreditPayments?.reduce((sum, p) => sum + p.amount, 0) || 0;
+
     // Get or create cash register entry
     const { data: existingRegister } = await supabase
       .from('cash_register')
@@ -189,7 +205,8 @@ const Banking = () => {
 
     if (existingRegister) {
       // Update with current totals
-      const closing = existingRegister.opening_balance + totalSales - totalRefunds - totalExpenses - totalSupplierPayments - totalDeposits;
+      // closing = opening + cash sales - refunds - expenses - supplier payments - deposits + credit payments from yesterday
+      const closing = existingRegister.opening_balance + totalSales - totalRefunds - totalExpenses - totalSupplierPayments - totalDeposits + creditPaymentsFromYesterday;
       
       await supabase
         .from('cash_register')
@@ -212,10 +229,6 @@ const Banking = () => {
       });
     } else {
       // Get yesterday's closing balance
-      const yesterday = new Date();
-      yesterday.setDate(yesterday.getDate() - 1);
-      const yesterdayStr = yesterday.toISOString().split('T')[0];
-
       const { data: yesterdayRegister } = await supabase
         .from('cash_register')
         .select('closing_balance')
@@ -223,7 +236,8 @@ const Banking = () => {
         .maybeSingle();
 
       const openingBalance = yesterdayRegister?.closing_balance || 0;
-      const closing = openingBalance + totalSales - totalRefunds - totalExpenses - totalSupplierPayments - totalDeposits;
+      // closing = opening + cash sales - refunds - expenses - supplier payments - deposits + credit payments from yesterday
+      const closing = openingBalance + totalSales - totalRefunds - totalExpenses - totalSupplierPayments - totalDeposits + creditPaymentsFromYesterday;
 
       const { data: newRegister, error } = await supabase
         .from('cash_register')
