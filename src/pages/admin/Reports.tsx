@@ -75,7 +75,7 @@ const Reports = () => {
     const endStr = format(endDate, 'yyyy-MM-dd');
 
     try {
-      // Fetch sales - exclude deleted and credit sales
+      // Fetch sales - exclude deleted and credit sales (credit sales don't count until payment)
       const { data: salesData } = await supabase
         .from('sales')
         .select('total, created_at, payment_method')
@@ -84,7 +84,19 @@ const Reports = () => {
         .gte('created_at', startStr)
         .lte('created_at', endStr + 'T23:59:59');
 
-      const totalSales = salesData?.reduce((sum, s) => sum + Number(s.total), 0) || 0;
+      const cashCardSales = salesData?.reduce((sum, s) => sum + Number(s.total), 0) || 0;
+
+      // Fetch credit payments - these count as revenue when payment is made
+      const { data: creditPaymentsData } = await supabase
+        .from('credit_payments')
+        .select('amount, payment_date')
+        .gte('payment_date', startStr)
+        .lte('payment_date', endStr + 'T23:59:59');
+
+      const creditPaymentsRevenue = creditPaymentsData?.reduce((sum, p) => sum + Number(p.amount), 0) || 0;
+
+      // Total revenue = cash/card sales + credit payments received
+      const totalSales = cashCardSales + creditPaymentsRevenue;
 
       // Fetch refunds - exclude deleted
       const { data: refundsData } = await supabase
@@ -146,10 +158,17 @@ const Reports = () => {
         .select('price, stock_quantity');
       const inventoryValue = inventoryData?.reduce((sum, p) => sum + (Number(p.price) * Number(p.stock_quantity)), 0) || 0;
 
+      // Accounts receivable - outstanding credit balances
+      const { data: creditSalesData } = await supabase
+        .from('credit_sales')
+        .select('balance')
+        .neq('status', 'paid');
+      const receivables = creditSalesData?.reduce((sum, c) => sum + Number(c.balance), 0) || 0;
+
       setAssets({
         cash: cashInBank,
         inventory: inventoryValue,
-        receivables: 0 // Would need accounts receivable table
+        receivables
       });
 
       // Liabilities (pending purchase orders)
@@ -177,13 +196,21 @@ const Reports = () => {
           .gte('created_at', monthStartStr)
           .lte('created_at', monthEndStr + 'T23:59:59');
 
+        const { data: mCreditPayments } = await supabase
+          .from('credit_payments')
+          .select('amount')
+          .gte('payment_date', monthStartStr)
+          .lte('payment_date', monthEndStr + 'T23:59:59');
+
         const { data: mExpenses } = await supabase
           .from('expenses')
           .select('amount')
           .gte('expense_date', monthStartStr)
           .lte('expense_date', monthEndStr);
 
-        const sales = mSales?.reduce((sum, s) => sum + Number(s.total), 0) || 0;
+        const cashCardSales = mSales?.reduce((sum, s) => sum + Number(s.total), 0) || 0;
+        const creditPayments = mCreditPayments?.reduce((sum, p) => sum + Number(p.amount), 0) || 0;
+        const sales = cashCardSales + creditPayments;
         const expenses = mExpenses?.reduce((sum, e) => sum + Number(e.amount), 0) || 0;
 
         months.push({
