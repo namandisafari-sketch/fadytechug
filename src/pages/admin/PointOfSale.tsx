@@ -73,6 +73,7 @@ const PointOfSale = () => {
   const [bankSettings, setBankSettings] = useState<BankSettings | null>(null);
   const [cashRegisterBalance, setCashRegisterBalance] = useState(0);
   const [creditNotes, setCreditNotes] = useState('');
+  const [endDayDate, setEndDayDate] = useState<Date | undefined>(undefined);
   
   // Backdate sale state
   const [saleDate, setSaleDate] = useState<Date | undefined>(undefined);
@@ -104,69 +105,79 @@ const PointOfSale = () => {
     }
   };
 
-  const fetchCashRegisterBalance = async () => {
-    const today = new Date().toISOString().split('T')[0];
+  const fetchCashRegisterBalance = async (forDate?: Date) => {
+    const targetDate = forDate || new Date();
+    const dateStr = targetDate.toISOString().split('T')[0];
     
-    // Get today's sales EXCLUDING credit sales
+    // Get the day's sales EXCLUDING credit sales (use created_at which may be backdated)
     const { data: salesData } = await supabase
       .from('sales')
       .select('total, payment_method')
-      .gte('created_at', `${today}T00:00:00`)
-      .lte('created_at', `${today}T23:59:59`);
+      .gte('created_at', `${dateStr}T00:00:00`)
+      .lte('created_at', `${dateStr}T23:59:59`);
 
     const totalSales = salesData?.filter(s => s.payment_method !== 'credit')
       .reduce((sum, s) => sum + s.total, 0) || 0;
 
-    // Get today's refunds
+    // Get credit payments made on this date (payment_date)
+    const { data: creditPaymentsData } = await supabase
+      .from('credit_payments')
+      .select('amount')
+      .gte('payment_date', `${dateStr}T00:00:00`)
+      .lte('payment_date', `${dateStr}T23:59:59`);
+
+    const totalCreditPayments = creditPaymentsData?.reduce((sum, p) => sum + p.amount, 0) || 0;
+
+    // Get the day's refunds
     const { data: refundsData } = await supabase
       .from('refunds')
       .select('amount')
-      .gte('created_at', `${today}T00:00:00`)
-      .lte('created_at', `${today}T23:59:59`);
+      .gte('created_at', `${dateStr}T00:00:00`)
+      .lte('created_at', `${dateStr}T23:59:59`);
 
     const totalRefunds = refundsData?.reduce((sum, r) => sum + r.amount, 0) || 0;
 
-    // Get today's expenses from cash register
+    // Get the day's expenses from cash register
     const { data: expensesData } = await supabase
       .from('expenses')
       .select('amount')
-      .eq('expense_date', today)
+      .eq('expense_date', dateStr)
       .eq('payment_source', 'cash_register');
 
     const totalExpenses = expensesData?.reduce((sum, e) => sum + e.amount, 0) || 0;
 
-    // Get today's supplier payments from cash register
+    // Get the day's supplier payments from cash register
     const { data: supplierPaymentsData } = await supabase
       .from('supplier_payments')
       .select('amount')
-      .eq('payment_date', today)
+      .eq('payment_date', dateStr)
       .eq('payment_source', 'cash_register');
 
     const totalSupplierPayments = supplierPaymentsData?.reduce((sum, p) => sum + p.amount, 0) || 0;
 
-    // Get today's deposits
+    // Get the day's deposits
     const { data: depositsData } = await supabase
       .from('bank_deposits')
       .select('amount')
-      .eq('deposit_date', today);
+      .eq('deposit_date', dateStr);
 
     const totalDeposits = depositsData?.reduce((sum, d) => sum + d.amount, 0) || 0;
 
-    // Get yesterday's closing balance (opening balance for today)
-    const yesterday = new Date();
-    yesterday.setDate(yesterday.getDate() - 1);
-    const yesterdayStr = yesterday.toISOString().split('T')[0];
+    // Get previous day's closing balance (opening balance for target date)
+    const previousDay = new Date(targetDate);
+    previousDay.setDate(previousDay.getDate() - 1);
+    const previousDayStr = previousDay.toISOString().split('T')[0];
 
-    const { data: yesterdayRegister } = await supabase
+    const { data: previousDayRegister } = await supabase
       .from('cash_register')
       .select('closing_balance')
-      .eq('date', yesterdayStr)
+      .eq('date', previousDayStr)
       .maybeSingle();
 
-    const openingBalance = yesterdayRegister?.closing_balance || 0;
+    const openingBalance = previousDayRegister?.closing_balance || 0;
     
-    // Calculate current balance
-    const balance = openingBalance + totalSales - totalRefunds - totalExpenses - totalSupplierPayments - totalDeposits;
+    // Calculate balance: opening + sales + credit payments - refunds - expenses - supplier payments - deposits
+    const balance = openingBalance + totalSales + totalCreditPayments - totalRefunds - totalExpenses - totalSupplierPayments - totalDeposits;
     setCashRegisterBalance(balance);
   };
 
@@ -437,9 +448,15 @@ const PointOfSale = () => {
   };
 
   const handleEndDay = async () => {
-    // Refresh the balance before showing dialog
+    // Reset to today and refresh the balance before showing dialog
+    setEndDayDate(undefined);
     await fetchCashRegisterBalance();
     setEndDayDialogOpen(true);
+  };
+
+  const handleEndDayDateChange = async (date: Date | undefined) => {
+    setEndDayDate(date);
+    await fetchCashRegisterBalance(date);
   };
 
   const endDay = async () => {
@@ -464,7 +481,8 @@ const PointOfSale = () => {
 
     setClosingShift(true);
     try {
-      const today = new Date().toISOString().split('T')[0];
+      const targetDate = endDayDate || new Date();
+      const dateStr = targetDate.toISOString().split('T')[0];
       
       // Create bank deposit for the closing balance
       const { error: depositError } = await supabase
@@ -473,19 +491,19 @@ const PointOfSale = () => {
           amount: cashRegisterBalance,
           bank_name: bankSettings.bankName,
           account_number: bankSettings.accountNumber || null,
-          deposit_date: today,
-          reference_number: `SHIFT-${today}-${Date.now()}`,
-          notes: `End of day deposit - ${new Date().toLocaleString()}`,
+          deposit_date: dateStr,
+          reference_number: `SHIFT-${dateStr}-${Date.now()}`,
+          notes: `End of day deposit for ${format(targetDate, 'PPP')}`,
           deposited_by: user?.id
         });
 
       if (depositError) throw depositError;
 
-      // Get or create cash register entry
+      // Get or create cash register entry for the target date
       const { data: existingRegister } = await supabase
         .from('cash_register')
         .select('*')
-        .eq('date', today)
+        .eq('date', dateStr)
         .maybeSingle();
 
       if (existingRegister) {
@@ -500,22 +518,22 @@ const PointOfSale = () => {
           .eq('id', existingRegister.id);
       } else {
         // Create new register entry and mark as closed
-        const yesterday = new Date();
-        yesterday.setDate(yesterday.getDate() - 1);
-        const yesterdayStr = yesterday.toISOString().split('T')[0];
+        const previousDay = new Date(targetDate);
+        previousDay.setDate(previousDay.getDate() - 1);
+        const previousDayStr = previousDay.toISOString().split('T')[0];
 
-        const { data: yesterdayRegister } = await supabase
+        const { data: previousDayRegister } = await supabase
           .from('cash_register')
           .select('closing_balance')
-          .eq('date', yesterdayStr)
+          .eq('date', previousDayStr)
           .maybeSingle();
 
-        const openingBalance = yesterdayRegister?.closing_balance || 0;
+        const openingBalance = previousDayRegister?.closing_balance || 0;
 
         await supabase
           .from('cash_register')
           .insert({
-            date: today,
+            date: dateStr,
             opening_balance: openingBalance,
             total_sales: 0,
             total_refunds: 0,
@@ -528,10 +546,11 @@ const PointOfSale = () => {
 
       toast({ 
         title: 'Day ended successfully', 
-        description: `${formatCurrency(cashRegisterBalance)} deposited to ${bankSettings.bankName}. See you tomorrow!` 
+        description: `${formatCurrency(cashRegisterBalance)} deposited to ${bankSettings.bankName} for ${format(targetDate, 'PPP')}` 
       });
       
       setEndDayDialogOpen(false);
+      setEndDayDate(undefined);
       setCashRegisterBalance(0);
 
     } catch (error: any) {
@@ -941,9 +960,50 @@ const PointOfSale = () => {
               End Day & Deposit to Bank
             </DialogTitle>
             <DialogDescription>
-              This will close today's shift and deposit the full cash register balance to your bank account.
+              This will close the shift for the selected date and deposit the full cash register balance to your bank account.
             </DialogDescription>
           </DialogHeader>
+          
+          {/* Date picker for custom date */}
+          <div className="space-y-2">
+            <Label>Select Date</Label>
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  className={cn(
+                    "w-full justify-start text-left font-normal",
+                    !endDayDate && "text-muted-foreground"
+                  )}
+                >
+                  <CalendarIcon className="mr-2 h-4 w-4" />
+                  {endDayDate ? format(endDayDate, "PPP") : <span>Today</span>}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0" align="start">
+                <Calendar
+                  mode="single"
+                  selected={endDayDate}
+                  onSelect={handleEndDayDateChange}
+                  disabled={(date) => date > new Date()}
+                  initialFocus
+                  className={cn("p-3 pointer-events-auto")}
+                />
+                {endDayDate && (
+                  <div className="p-2 border-t">
+                    <Button 
+                      variant="ghost" 
+                      size="sm" 
+                      className="w-full"
+                      onClick={() => handleEndDayDateChange(undefined)}
+                    >
+                      Clear (use today)
+                    </Button>
+                  </div>
+                )}
+              </PopoverContent>
+            </Popover>
+          </div>
           
           <div className="space-y-4 py-4">
             <div className="p-4 bg-orange-50 dark:bg-orange-950/30 rounded-lg border border-orange-200 dark:border-orange-800">
