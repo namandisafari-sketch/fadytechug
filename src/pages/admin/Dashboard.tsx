@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Package, MessageSquare, Users, DollarSign, CreditCard, CalendarIcon } from 'lucide-react';
+import { Package, MessageSquare, Users, DollarSign, CreditCard, CalendarIcon, TrendingUp } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { formatCurrency } from '@/lib/currency';
 import { Badge } from '@/components/ui/badge';
@@ -17,12 +17,14 @@ interface Stats {
   totalInquiries: number;
   newInquiries: number;
   totalCustomers: number;
-  todaySales: number;
-  todayCashSales: number;
-  todayTransactions: number;
+  dayCashReceived: number;
+  dayCreditOutstanding: number;
+  dayTransactions: number;
+  dayRefunds: number;
+  dayExpenses: number;
+  dayNetCash: number;
   outstandingCredit: number;
   creditCustomers: number;
-  todayCreditSales: number;
 }
 
 interface CreditCustomer {
@@ -30,6 +32,19 @@ interface CreditCustomer {
   customer_name: string;
   total_balance: number;
 }
+
+const KAMPALA_OFFSET_MS = 3 * 60 * 60 * 1000;
+
+const getKampalaDateString = (date: Date) =>
+  new Date(date.getTime() + KAMPALA_OFFSET_MS).toISOString().split('T')[0];
+
+const getKampalaDayRangeIso = (dateStr: string) => {
+  const [y, m, d] = dateStr.split('-').map(Number);
+  const startUtcMs = Date.UTC(y, m - 1, d, 0, 0, 0) - KAMPALA_OFFSET_MS;
+  const startIso = new Date(startUtcMs).toISOString();
+  const endIso = new Date(startUtcMs + 24 * 60 * 60 * 1000 - 1).toISOString();
+  return { startIso, endIso };
+};
 
 const Dashboard = () => {
   const navigate = useNavigate();
@@ -40,12 +55,14 @@ const Dashboard = () => {
     totalInquiries: 0,
     newInquiries: 0,
     totalCustomers: 0,
-    todaySales: 0,
-    todayCashSales: 0,
-    todayTransactions: 0,
+    dayCashReceived: 0,
+    dayCreditOutstanding: 0,
+    dayTransactions: 0,
+    dayRefunds: 0,
+    dayExpenses: 0,
+    dayNetCash: 0,
     outstandingCredit: 0,
     creditCustomers: 0,
-    todayCreditSales: 0
   });
   const [creditCustomers, setCreditCustomers] = useState<CreditCustomer[]>([]);
   const [loading, setLoading] = useState(true);
@@ -54,77 +71,74 @@ const Dashboard = () => {
     const fetchStats = async () => {
       try {
         setLoading(true);
-        
-        // Create start and end of day in local timezone, then convert to ISO
-        const startOfDay = new Date(selectedDate);
-        startOfDay.setHours(0, 0, 0, 0);
-        const endOfDay = new Date(selectedDate);
-        endOfDay.setHours(23, 59, 59, 999);
-        // Use local date string (avoid timezone shifting from toISOString)
-        const dateStr = format(selectedDate, 'yyyy-MM-dd');
-        
-        const [productsRes, inquiriesRes, customersRes, salesRes, creditRes, expensesRes] = await Promise.all([
+
+        const dateStr = getKampalaDateString(selectedDate);
+        const { startIso, endIso } = getKampalaDayRangeIso(dateStr);
+
+        const [productsRes, inquiriesRes, customersRes, salesRes, creditSalesRes, creditRes, refundsRes, expensesRes] = await Promise.all([
           supabase.from('products').select('id, is_active'),
           supabase.from('inquiries').select('id, status'),
           supabase.from('customers').select('id'),
-          supabase.from('sales').select('total, payment_method, created_at')
-            .gte('created_at', startOfDay.toISOString())
-            .lte('created_at', endOfDay.toISOString()),
-          supabase.from('credit_sales')
-            .select('customer_id, balance, customers(name)')
-            .gt('balance', 0),
-          supabase.from('expenses')
-            .select('amount')
-            .eq('expense_date', dateStr)
-            .eq('payment_source', 'cash_register')
+          supabase.from('sales').select('id, total, payment_method, created_at').gte('created_at', startIso).lte('created_at', endIso).is('deleted_at', null),
+          // Credit sales with balance info for the day's sales
+          supabase.from('credit_sales').select('sale_id, balance, status'),
+          // All outstanding credit
+          supabase.from('credit_sales').select('customer_id, balance, customers(name)').gt('balance', 0),
+          supabase.from('refunds').select('amount, created_at').gte('created_at', startIso).lte('created_at', endIso).is('deleted_at', null),
+          supabase.from('expenses').select('amount').eq('expense_date', dateStr),
         ]);
 
-        const todaySalesTotal = salesRes.data?.reduce((sum, s) => sum + s.total, 0) || 0;
-        
-        // Calculate cash sales (excluding credit) minus expenses
-        const grossCashSales = salesRes.data?.filter(s => s.payment_method !== 'credit')
-          .reduce((sum, s) => sum + s.total, 0) || 0;
-        const totalExpenses = expensesRes.data?.reduce((sum, e) => sum + e.amount, 0) || 0;
-        const todayCashSales = grossCashSales - totalExpenses;
-        
-        // Calculate credit sales for the selected date
-        const todayCreditSales = salesRes.data?.filter(s => s.payment_method === 'credit')
-          .reduce((sum, s) => sum + s.total, 0) || 0;
-        
-        // Calculate outstanding credit
+        const daySales = salesRes.data || [];
+        const creditSalesData = creditSalesRes.data || [];
+        const creditMap = new Map(creditSalesData.map((c) => [c.sale_id, { balance: c.balance, status: c.status }]));
+
+        // Enrich day sales with credit balance
+        const enrichedDaySales = daySales.map((s) => ({
+          ...s,
+          credit_balance: creditMap.get(s.id)?.balance,
+        }));
+
+        // Cash received = non-credit sales + credit sales already paid in full (balance = 0)
+        const paidCreditSales = enrichedDaySales.filter((s) => s.payment_method === 'credit' && s.credit_balance === 0);
+        const cashReceivedSales = enrichedDaySales.filter((s) => s.payment_method !== 'credit').concat(paidCreditSales);
+        const dayCashReceived = cashReceivedSales.reduce((sum, s) => sum + s.total, 0);
+
+        // Credit outstanding for the day
+        const dayCreditOutstanding = enrichedDaySales.filter((s) => s.payment_method === 'credit' && (s.credit_balance ?? 0) > 0).reduce((sum, s) => sum + s.total, 0);
+
+        const dayRefunds = refundsRes.data?.reduce((sum, r) => sum + r.amount, 0) || 0;
+        const dayExpenses = expensesRes.data?.reduce((sum, e) => sum + e.amount, 0) || 0;
+        const dayNetCash = dayCashReceived - dayRefunds - dayExpenses;
+
+        // All outstanding credit
         const outstandingCredit = creditRes.data?.reduce((sum, c) => sum + c.balance, 0) || 0;
-        
+
         // Group by customer
         const customerBalances: Record<string, CreditCustomer> = {};
         creditRes.data?.forEach((c: any) => {
           if (!customerBalances[c.customer_id]) {
-            customerBalances[c.customer_id] = {
-              customer_id: c.customer_id,
-              customer_name: c.customers?.name || 'Unknown',
-              total_balance: 0
-            };
+            customerBalances[c.customer_id] = { customer_id: c.customer_id, customer_name: c.customers?.name || 'Unknown', total_balance: 0 };
           }
           customerBalances[c.customer_id].total_balance += c.balance;
         });
-        
-        const creditCustomersList = Object.values(customerBalances)
-          .sort((a, b) => b.total_balance - a.total_balance)
-          .slice(0, 5);
 
+        const creditCustomersList = Object.values(customerBalances).sort((a, b) => b.total_balance - a.total_balance).slice(0, 5);
         setCreditCustomers(creditCustomersList);
 
         setStats({
           totalProducts: productsRes.data?.length || 0,
-          activeProducts: productsRes.data?.filter(p => p.is_active).length || 0,
+          activeProducts: productsRes.data?.filter((p) => p.is_active).length || 0,
           totalInquiries: inquiriesRes.data?.length || 0,
-          newInquiries: inquiriesRes.data?.filter(i => i.status === 'new').length || 0,
+          newInquiries: inquiriesRes.data?.filter((i) => i.status === 'new').length || 0,
           totalCustomers: customersRes.data?.length || 0,
-          todaySales: todaySalesTotal,
-          todayCashSales,
-          todayCreditSales,
-          todayTransactions: salesRes.data?.length || 0,
+          dayCashReceived,
+          dayCreditOutstanding,
+          dayTransactions: daySales.length,
+          dayRefunds,
+          dayExpenses,
+          dayNetCash,
           outstandingCredit,
-          creditCustomers: Object.keys(customerBalances).length
+          creditCustomers: Object.keys(customerBalances).length,
         });
       } catch (error) {
         console.error('Error fetching stats:', error);
@@ -141,37 +155,43 @@ const Dashboard = () => {
 
   const statCards = [
     {
-      title: `${dateLabel} Total Sales`,
-      value: formatCurrency(stats.todaySales),
-      subtitle: `${stats.todayTransactions} transactions`,
+      title: `${dateLabel} Cash Received`,
+      value: formatCurrency(stats.dayCashReceived),
+      subtitle: `${stats.dayTransactions} transactions`,
       icon: DollarSign,
       color: 'text-green-500',
       badges: [
-        { label: 'Cash', value: formatCurrency(stats.todayCashSales), variant: 'default' as const },
-        { label: 'Credit', value: formatCurrency(stats.todayCreditSales), variant: 'secondary' as const, highlight: stats.todayCreditSales > 0 }
-      ]
+        { label: 'Credit Out', value: formatCurrency(stats.dayCreditOutstanding), variant: 'secondary' as const, highlight: stats.dayCreditOutstanding > 0 },
+      ],
+    },
+    {
+      title: `${dateLabel} Net Cash`,
+      value: formatCurrency(stats.dayNetCash),
+      subtitle: `Refunds: ${formatCurrency(stats.dayRefunds)} | Expenses: ${formatCurrency(stats.dayExpenses)}`,
+      icon: TrendingUp,
+      color: 'text-emerald-600',
     },
     {
       title: 'Total Products',
       value: stats.totalProducts,
       subtitle: `${stats.activeProducts} active`,
       icon: Package,
-      color: 'text-blue-500'
+      color: 'text-blue-500',
     },
     {
       title: 'Inquiries',
       value: stats.totalInquiries,
       subtitle: `${stats.newInquiries} new`,
       icon: MessageSquare,
-      color: 'text-orange-500'
+      color: 'text-orange-500',
     },
     {
       title: 'Customers',
       value: stats.totalCustomers,
       subtitle: 'Total registered',
       icon: Users,
-      color: 'text-purple-500'
-    }
+      color: 'text-purple-500',
+    },
   ];
 
   return (
