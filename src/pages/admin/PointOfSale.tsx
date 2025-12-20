@@ -110,13 +110,16 @@ const PointOfSale = () => {
     // Use local date string (avoid timezone shifting from toISOString)
     const dateStr = format(targetDate, 'yyyy-MM-dd');
     
+    const startTs = `${dateStr}T00:00:00+03:00`;
+    const endTs = `${dateStr}T23:59:59+03:00`;
+
     // Get the day's CASH sales only (credit/card/mobile_money/bank_transfer are not physical drawer cash)
-    // NOTE: we filter by created_at range for the selected date.
+    // NOTE: Use Africa/Kampala day boundaries (+03:00)
     const { data: salesData } = await supabase
       .from('sales')
       .select('total, payment_method')
-      .gte('created_at', `${dateStr}T00:00:00`)
-      .lte('created_at', `${dateStr}T23:59:59`);
+      .gte('created_at', startTs)
+      .lte('created_at', endTs);
 
     const totalCashSales =
       salesData?.filter((s) => s.payment_method === 'cash').reduce((sum, s) => sum + s.total, 0) || 0;
@@ -125,8 +128,8 @@ const PointOfSale = () => {
     const { data: creditPaymentsData } = await supabase
       .from('credit_payments')
       .select('amount, payment_method')
-      .gte('payment_date', `${dateStr}T00:00:00`)
-      .lte('payment_date', `${dateStr}T23:59:59`)
+      .gte('payment_date', startTs)
+      .lte('payment_date', endTs)
       .eq('payment_method', 'cash');
 
     const totalCashCreditPayments = creditPaymentsData?.reduce((sum, p) => sum + p.amount, 0) || 0;
@@ -135,8 +138,8 @@ const PointOfSale = () => {
     const { data: refundsData } = await supabase
       .from('refunds')
       .select('amount')
-      .gte('created_at', `${dateStr}T00:00:00`)
-      .lte('created_at', `${dateStr}T23:59:59`);
+      .gte('created_at', startTs)
+      .lte('created_at', endTs);
 
     const totalRefunds = refundsData?.reduce((sum, r) => sum + r.amount, 0) || 0;
 
