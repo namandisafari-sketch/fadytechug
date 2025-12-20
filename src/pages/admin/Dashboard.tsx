@@ -62,38 +62,50 @@ const Dashboard = () => {
         endOfDay.setHours(23, 59, 59, 999);
         const dateStr = format(selectedDate, 'yyyy-MM-dd');
         
-        const [productsRes, inquiriesRes, customersRes, salesRes, creditRes, expensesRes] = await Promise.all([
+        const [productsRes, inquiriesRes, customersRes, salesRes, allCreditSalesRes, expensesRes] = await Promise.all([
           supabase.from('products').select('id, is_active'),
           supabase.from('inquiries').select('id, status'),
           supabase.from('customers').select('id'),
-          supabase.from('sales').select('total, payment_method, created_at')
+          supabase.from('sales').select('id, total, payment_method, created_at')
             .gte('created_at', startOfDay.toISOString())
             .lte('created_at', endOfDay.toISOString()),
           supabase.from('credit_sales')
-            .select('customer_id, balance, customers(name)')
-            .gt('balance', 0),
+            .select('sale_id, customer_id, balance, customers(name)'),
           supabase.from('expenses')
             .select('amount')
             .eq('expense_date', dateStr)
         ]);
 
-        // Cash sales (non-credit payment methods)
-        const todayCashSales = salesRes.data?.filter(s => s.payment_method !== 'credit')
-          .reduce((sum, s) => sum + s.total, 0) || 0;
+        // Build a map of sale_id -> credit balance
+        const creditBalanceMap = new Map<string, number>();
+        allCreditSalesRes.data?.forEach((c: any) => {
+          creditBalanceMap.set(c.sale_id, c.balance);
+        });
+
+        // Cash sales: non-credit OR credit with balance = 0 (fully paid)
+        const todayCashSales = salesRes.data?.filter(s => {
+          if (s.payment_method !== 'credit') return true;
+          const balance = creditBalanceMap.get(s.id);
+          return balance !== undefined && balance === 0;
+        }).reduce((sum, s) => sum + s.total, 0) || 0;
         
-        // Credit sales for the selected date
-        const todayCreditSales = salesRes.data?.filter(s => s.payment_method === 'credit')
-          .reduce((sum, s) => sum + s.total, 0) || 0;
+        // Credit sales: only those with balance > 0 (still owed)
+        const todayCreditSales = salesRes.data?.filter(s => {
+          if (s.payment_method !== 'credit') return false;
+          const balance = creditBalanceMap.get(s.id);
+          return balance !== undefined && balance > 0;
+        }).reduce((sum, s) => sum + s.total, 0) || 0;
         
         // Total expenses for the day
         const todayExpenses = expensesRes.data?.reduce((sum, e) => sum + e.amount, 0) || 0;
         
-        // Outstanding credit (all uncollected balances)
-        const outstandingCredit = creditRes.data?.reduce((sum, c) => sum + c.balance, 0) || 0;
+        // Outstanding credit (all uncollected balances with balance > 0)
+        const outstandingCreditData = allCreditSalesRes.data?.filter((c: any) => c.balance > 0) || [];
+        const outstandingCredit = outstandingCreditData.reduce((sum: number, c: any) => sum + c.balance, 0);
         
-        // Group by customer for top balances
+        // Group by customer for top balances (only those with balance > 0)
         const customerBalances: Record<string, CreditCustomer> = {};
-        creditRes.data?.forEach((c: any) => {
+        outstandingCreditData.forEach((c: any) => {
           if (!customerBalances[c.customer_id]) {
             customerBalances[c.customer_id] = {
               customer_id: c.customer_id,
@@ -148,14 +160,14 @@ const Dashboard = () => {
       borderColor: 'border-green-500/30'
     },
     {
-      title: `${dateLabel} Credit Sales`,
-      description: 'Sales completed on credit terms',
+      title: `${dateLabel} Credit Outstanding`,
+      description: 'Credit sales still awaiting payment',
       value: formatCurrency(stats.todayCreditSales),
-      subtitle: 'Awaiting payment collection',
+      subtitle: stats.todayCreditSales > 0 ? 'Awaiting payment collection' : 'All collected',
       icon: CreditCard,
-      color: 'text-blue-600',
-      bgColor: 'bg-blue-500/10',
-      borderColor: 'border-blue-500/30'
+      color: 'text-yellow-600',
+      bgColor: 'bg-yellow-500/10',
+      borderColor: 'border-yellow-500/30'
     },
     {
       title: `${dateLabel} Expenses`,
