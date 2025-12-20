@@ -1,11 +1,15 @@
 import { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Package, MessageSquare, Users, DollarSign, CreditCard, AlertCircle } from 'lucide-react';
+import { Package, MessageSquare, Users, DollarSign, CreditCard, CalendarIcon } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { formatCurrency } from '@/lib/currency';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { useNavigate } from 'react-router-dom';
+import { Calendar } from '@/components/ui/calendar';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { cn } from '@/lib/utils';
+import { format } from 'date-fns';
 
 interface Stats {
   totalProducts: number;
@@ -29,6 +33,7 @@ interface CreditCustomer {
 
 const Dashboard = () => {
   const navigate = useNavigate();
+  const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [stats, setStats] = useState<Stats>({
     totalProducts: 0,
     activeProducts: 0,
@@ -48,15 +53,16 @@ const Dashboard = () => {
   useEffect(() => {
     const fetchStats = async () => {
       try {
-        const today = new Date().toISOString().split('T')[0];
+        setLoading(true);
+        const dateStr = format(selectedDate, 'yyyy-MM-dd');
         
         const [productsRes, inquiriesRes, customersRes, salesRes, creditRes] = await Promise.all([
           supabase.from('products').select('id, is_active'),
           supabase.from('inquiries').select('id, status'),
           supabase.from('customers').select('id'),
           supabase.from('sales').select('total, payment_method, created_at')
-            .gte('created_at', `${today}T00:00:00`)
-            .lte('created_at', `${today}T23:59:59`),
+            .gte('created_at', `${dateStr}T00:00:00`)
+            .lte('created_at', `${dateStr}T23:59:59`),
           supabase.from('credit_sales')
             .select('customer_id, balance, customers(name)')
             .gt('balance', 0)
@@ -68,7 +74,7 @@ const Dashboard = () => {
         const todayCashSales = salesRes.data?.filter(s => s.payment_method !== 'credit')
           .reduce((sum, s) => sum + s.total, 0) || 0;
         
-        // Calculate credit sales for today
+        // Calculate credit sales for the selected date
         const todayCreditSales = salesRes.data?.filter(s => s.payment_method === 'credit')
           .reduce((sum, s) => sum + s.total, 0) || 0;
         
@@ -115,20 +121,23 @@ const Dashboard = () => {
     };
 
     fetchStats();
-  }, []);
+  }, [selectedDate]);
+
+  const isToday = format(selectedDate, 'yyyy-MM-dd') === format(new Date(), 'yyyy-MM-dd');
+  const dateLabel = isToday ? "Today's" : format(selectedDate, 'MMM d');
 
   const statCards = [
     {
-      title: "Today's Cash Sales",
+      title: `${dateLabel} Cash Sales`,
       value: formatCurrency(stats.todayCashSales),
       subtitle: `${stats.todayTransactions} transactions`,
       icon: DollarSign,
       color: 'text-green-500'
     },
     {
-      title: "Today's Credit Sales",
+      title: `${dateLabel} Credit Sales`,
       value: formatCurrency(stats.todayCreditSales),
-      subtitle: 'Sold on credit today',
+      subtitle: 'Sold on credit',
       icon: CreditCard,
       color: 'text-yellow-500'
     },
@@ -157,9 +166,36 @@ const Dashboard = () => {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold text-foreground">Dashboard</h1>
-        <p className="text-muted-foreground">Welcome to Fady Technologies Admin</p>
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-bold text-foreground">Dashboard</h1>
+          <p className="text-muted-foreground">Welcome to Fady Technologies Admin</p>
+        </div>
+        
+        <div className="flex items-center gap-2">
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button variant="outline" className={cn("justify-start text-left font-normal", !selectedDate && "text-muted-foreground")}>
+                <CalendarIcon className="mr-2 h-4 w-4" />
+                {format(selectedDate, "PPP")}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-0" align="end">
+              <Calendar
+                mode="single"
+                selected={selectedDate}
+                onSelect={(date) => date && setSelectedDate(date)}
+                initialFocus
+                className={cn("p-3 pointer-events-auto")}
+              />
+            </PopoverContent>
+          </Popover>
+          {!isToday && (
+            <Button variant="outline" size="sm" onClick={() => setSelectedDate(new Date())}>
+              Today
+            </Button>
+          )}
+        </div>
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
