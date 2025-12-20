@@ -88,12 +88,15 @@ const Dashboard = () => {
         return balance !== undefined && balance === 0;
       }).reduce((sum, s) => sum + s.total, 0) || 0;
       
-      // Credit sales: only those with balance > 0 (still owed)
+      // Credit sales: sum of current balances for sales that still have outstanding amounts
       const todayCreditSales = salesRes.data?.filter(s => {
         if (s.payment_method !== 'credit') return false;
         const balance = creditBalanceMap.get(s.id);
         return balance !== undefined && balance > 0;
-      }).reduce((sum, s) => sum + s.total, 0) || 0;
+      }).reduce((sum, s) => {
+        const balance = creditBalanceMap.get(s.id) || 0;
+        return sum + balance;
+      }, 0) || 0;
       
       // Total expenses for the day
       const todayExpenses = expensesRes.data?.reduce((sum, e) => sum + e.amount, 0) || 0;
