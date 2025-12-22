@@ -98,18 +98,23 @@ const Sales = () => {
   const [exchangeRefunds, setExchangeRefunds] = useState(0);
   const [exchangeCount, setExchangeCount] = useState(0);
 
-  const KAMPALA_OFFSET_MS = 3 * 60 * 60 * 1000;
+  // Use local browser timezone for consistency with Dashboard
+  const getLocalDateString = (date: Date) => {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
 
-  const getKampalaDateString = (date: Date) =>
-    new Date(date.getTime() + KAMPALA_OFFSET_MS).toISOString().split('T')[0];
-
-  const getKampalaDayRangeIso = (dateStr: string) => {
-    // dateStr format: YYYY-MM-DD
+  const getLocalDayRangeIso = (dateStr: string) => {
+    // dateStr format: YYYY-MM-DD - parse as local date
     const [y, m, d] = dateStr.split('-').map(Number);
-    const startUtcMs = Date.UTC(y, m - 1, d, 0, 0, 0) - KAMPALA_OFFSET_MS;
-    const startIso = new Date(startUtcMs).toISOString();
-    const endIso = new Date(startUtcMs + 24 * 60 * 60 * 1000 - 1).toISOString();
-    return { startIso, endIso };
+    const startOfDay = new Date(y, m - 1, d, 0, 0, 0, 0);
+    const endOfDay = new Date(y, m - 1, d, 23, 59, 59, 999);
+    return { 
+      startIso: startOfDay.toISOString(), 
+      endIso: endOfDay.toISOString() 
+    };
   };
 
   // Scanner state
@@ -208,7 +213,7 @@ const Sales = () => {
       .order('created_at', { ascending: false });
 
     if (dateFilter) {
-      const { startIso, endIso } = getKampalaDayRangeIso(dateFilter);
+      const { startIso, endIso } = getLocalDayRangeIso(dateFilter);
       query = query.gte('created_at', startIso).lte('created_at', endIso);
     }
 
@@ -262,7 +267,7 @@ const Sales = () => {
       .order('created_at', { ascending: false });
 
     if (dateFilter) {
-      const { startIso, endIso } = getKampalaDayRangeIso(dateFilter);
+      const { startIso, endIso } = getLocalDayRangeIso(dateFilter);
       query = query.gte('created_at', startIso).lte('created_at', endIso);
     }
 
@@ -271,15 +276,15 @@ const Sales = () => {
   };
 
   const fetchExpensesTotal = async () => {
-    const day = dateFilter || getKampalaDateString(new Date());
+    const day = dateFilter || getLocalDateString(new Date());
     const { data } = await supabase.from('expenses').select('amount').eq('expense_date', day);
     const total = data?.reduce((sum, e) => sum + e.amount, 0) || 0;
     setExpensesTotal(total);
   };
 
   const fetchCreditPayments = async () => {
-    const day = dateFilter || getKampalaDateString(new Date());
-    const { startIso, endIso } = getKampalaDayRangeIso(day);
+    const day = dateFilter || getLocalDateString(new Date());
+    const { startIso, endIso } = getLocalDayRangeIso(day);
 
     const { data } = await supabase
       .from('credit_payments')
@@ -293,7 +298,7 @@ const Sales = () => {
   };
 
   const fetchExchanges = async () => {
-    const day = dateFilter || getKampalaDateString(new Date());
+    const day = dateFilter || getLocalDateString(new Date());
     const { data } = await supabase
       .from('exchanges')
       .select('id, amount_paid, refund_given')
@@ -634,8 +639,8 @@ const Sales = () => {
     r.receipt_number.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  const statsDay = dateFilter || getKampalaDateString(new Date());
-  const { startIso: statsStartIso, endIso: statsEndIso } = getKampalaDayRangeIso(statsDay);
+  const statsDay = dateFilter || getLocalDateString(new Date());
+  const { startIso: statsStartIso, endIso: statsEndIso } = getLocalDayRangeIso(statsDay);
 
   const daySales = sales.filter((s) => s.created_at >= statsStartIso && s.created_at <= statsEndIso);
 
