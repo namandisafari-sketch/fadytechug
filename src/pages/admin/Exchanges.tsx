@@ -314,6 +314,68 @@ const Exchanges = () => {
 
       if (exchangeError) throw exchangeError;
 
+      // Update cash register for TODAY's date (top-ups add to sales, refunds add to refunds)
+      const today = new Date().toISOString().split('T')[0];
+      
+      // Check if cash register exists for today
+      const { data: existingRegister } = await supabase
+        .from('cash_register')
+        .select('*')
+        .eq('date', today)
+        .maybeSingle();
+
+      if (existingRegister) {
+        // Update existing register
+        if (difference > 0) {
+          // Top-up: add to total_sales
+          await supabase
+            .from('cash_register')
+            .update({ 
+              total_sales: (existingRegister.total_sales || 0) + difference,
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', existingRegister.id);
+        } else if (difference < 0 || exchangeType === 'refund') {
+          // Refund: add to total_refunds
+          const refundAmount = exchangeType === 'refund' ? returnedValue : Math.abs(difference);
+          await supabase
+            .from('cash_register')
+            .update({ 
+              total_refunds: (existingRegister.total_refunds || 0) + refundAmount,
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', existingRegister.id);
+        }
+      } else {
+        // Create new register for today if it doesn't exist
+        if (difference > 0) {
+          await supabase
+            .from('cash_register')
+            .insert({
+              date: today,
+              opening_balance: 0,
+              total_sales: difference,
+              total_refunds: 0,
+              total_expenses: 0,
+              total_deposits: 0,
+              notes: 'Auto-created from exchange top-up'
+            });
+        } else if (difference < 0 || exchangeType === 'refund') {
+          const refundAmount = exchangeType === 'refund' ? returnedValue : Math.abs(difference);
+          await supabase
+            .from('cash_register')
+            .insert({
+              date: today,
+              opening_balance: 0,
+              total_sales: 0,
+              total_refunds: refundAmount,
+              total_expenses: 0,
+              total_deposits: 0,
+              notes: 'Auto-created from exchange refund'
+            });
+        }
+      }
+
       // Update inventory for returned items (add back to stock)
       for (const item of returnedItemsData) {
         const { data: product } = await supabase
@@ -373,7 +435,7 @@ const Exchanges = () => {
       toast({ 
         title: 'Success', 
         description: exchangeType === 'exchange' 
-          ? `Exchange processed. ${difference > 0 ? `Customer paid ${formatCurrency(difference)} top-up` : difference < 0 ? `Refunded ${formatCurrency(Math.abs(difference))} to customer` : 'Even exchange'}`
+          ? `Exchange processed. ${difference > 0 ? `Customer paid ${formatCurrency(difference)} top-up (added to today's cash)` : difference < 0 ? `Refunded ${formatCurrency(Math.abs(difference))} to customer` : 'Even exchange'}`
           : `Refund of ${formatCurrency(returnedValue)} processed`
       });
       
