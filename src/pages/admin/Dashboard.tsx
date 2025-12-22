@@ -78,9 +78,8 @@ const Dashboard = () => {
           .select('amount')
           .eq('expense_date', dateStr),
         supabase.from('exchanges')
-          .select('id, amount_paid, refund_given, exchange_type, created_at')
-          .gte('created_at', startOfDay.toISOString())
-          .lte('created_at', endOfDay.toISOString())
+          .select('id, amount_paid, refund_given, exchange_type, cash_date')
+          .eq('cash_date', dateStr)
       ]);
 
       // Get sale IDs for credit sales on the selected date

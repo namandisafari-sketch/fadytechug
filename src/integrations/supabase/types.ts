@@ -229,6 +229,7 @@ export type Database = {
       exchanges: {
         Row: {
           amount_paid: number | null
+          cash_date: string | null
           created_at: string
           customer_name: string | null
           difference_amount: number | null
@@ -248,6 +249,7 @@ export type Database = {
         }
         Insert: {
           amount_paid?: number | null
+          cash_date?: string | null
           created_at?: string
           customer_name?: string | null
           difference_amount?: number | null
@@ -267,6 +269,7 @@ export type Database = {
         }
         Update: {
           amount_paid?: number | null
+          cash_date?: string | null
           created_at?: string
           customer_name?: string | null
           difference_amount?: number | null
