@@ -13,6 +13,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { Wallet, Plus, Trash2 } from 'lucide-react';
 import { formatCurrency } from '@/lib/currency';
+import { getUgandaDateString, formatUgandaDate } from '@/lib/utils';
 
 const EXPENSE_CATEGORIES = [
   { value: 'utilities', label: 'Utilities' },
@@ -46,7 +47,7 @@ const Expenses = () => {
   const [amount, setAmount] = useState('');
   const [paymentMethod, setPaymentMethod] = useState('cash');
   const [paymentSource, setPaymentSource] = useState<'cash_register' | 'bank'>('cash_register');
-  const [expenseDate, setExpenseDate] = useState(new Date().toISOString().split('T')[0]);
+  const [expenseDate, setExpenseDate] = useState(getUgandaDateString());
   const [notes, setNotes] = useState('');
   const [loading, setLoading] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -128,7 +129,7 @@ const Expenses = () => {
     setAmount('');
     setPaymentMethod('cash');
     setPaymentSource('cash_register');
-    setExpenseDate(new Date().toISOString().split('T')[0]);
+    setExpenseDate(getUgandaDateString());
     setNotes('');
   };
 

@@ -29,6 +29,7 @@ import {
 } from 'lucide-react';
 import { formatCurrency } from '@/lib/currency';
 import BarcodeScanner from '@/components/BarcodeScanner';
+import { formatUgandaDateTime, formatUgandaDate } from '@/lib/utils';
 
 interface Sale {
   id: string;
@@ -767,7 +768,7 @@ const Sales = () => {
                   {filteredSales.map(sale => (
                     <TableRow key={sale.id}>
                       <TableCell className="font-mono">{sale.receipt_number}</TableCell>
-                      <TableCell>{new Date(sale.created_at).toLocaleString()}</TableCell>
+                      <TableCell>{formatUgandaDateTime(sale.created_at)}</TableCell>
                       <TableCell>{sale.customer_name || 'Walk-in'}</TableCell>
                       <TableCell>
                         <div className="flex flex-col gap-1">
@@ -839,7 +840,7 @@ const Sales = () => {
                 <TableBody>
                   {filteredRefunds.map(refund => (
                     <TableRow key={refund.id}>
-                      <TableCell>{new Date(refund.created_at).toLocaleDateString()}</TableCell>
+                      <TableCell>{formatUgandaDate(refund.created_at)}</TableCell>
                       <TableCell className="font-mono">{refund.receipt_number}</TableCell>
                       <TableCell>{refund.sales?.customer_name || 'Walk-in'}</TableCell>
                       <TableCell>
@@ -899,8 +900,8 @@ const Sales = () => {
                     {deletedSales.map(sale => (
                       <TableRow key={sale.id}>
                         <TableCell className="font-mono">{sale.receipt_number}</TableCell>
-                        <TableCell>{sale.deleted_at ? new Date(sale.deleted_at).toLocaleString() : '-'}</TableCell>
-                        <TableCell>{new Date(sale.created_at).toLocaleString()}</TableCell>
+                        <TableCell>{sale.deleted_at ? formatUgandaDateTime(sale.deleted_at) : '-'}</TableCell>
+                        <TableCell>{formatUgandaDateTime(sale.created_at)}</TableCell>
                         <TableCell>{sale.customer_name || 'Walk-in'}</TableCell>
                         <TableCell className="text-right font-medium">{formatCurrency(sale.total)}</TableCell>
                         <TableCell className="text-right">
@@ -946,7 +947,7 @@ const Sales = () => {
               <div className="text-center border-b pb-4">
                 <h2 className="font-bold text-lg">FADY TECHNOLOGIES</h2>
                 <p className="text-muted-foreground">Receipt #{selectedSale.receipt_number}</p>
-                <p className="text-xs text-muted-foreground">{new Date(selectedSale.created_at).toLocaleString()}</p>
+                <p className="text-xs text-muted-foreground">{formatUgandaDateTime(selectedSale.created_at)}</p>
               </div>
 
               <div className="space-y-2">
@@ -1042,7 +1043,7 @@ const Sales = () => {
                   </div>
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Date:</span>
-                    <span>{new Date(refundSale.created_at).toLocaleDateString()}</span>
+                    <span>{formatUgandaDate(refundSale.created_at)}</span>
                   </div>
                   <div className="flex justify-between font-bold">
                     <span>Sale Total:</span>

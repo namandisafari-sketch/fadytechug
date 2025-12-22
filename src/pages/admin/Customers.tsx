@@ -17,7 +17,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { Plus, Users, Edit, Trash2, Search, Mail, Phone, CreditCard, DollarSign, CalendarIcon, X } from 'lucide-react';
 import { formatCurrency } from '@/lib/currency';
-import { cn } from '@/lib/utils';
+import { cn, getUgandaDateString, formatUgandaDate, toUgandaDate } from '@/lib/utils';
 
 interface Customer {
   id: string;
@@ -75,7 +75,7 @@ const Customers = () => {
   const [paymentAmount, setPaymentAmount] = useState('');
   const [paymentMethod, setPaymentMethod] = useState('cash');
   const [paymentNotes, setPaymentNotes] = useState('');
-  const [paymentDate, setPaymentDate] = useState(new Date().toISOString().split('T')[0]);
+  const [paymentDate, setPaymentDate] = useState(getUgandaDateString());
   const [paymentHistory, setPaymentHistory] = useState<CreditPayment[]>([]);
 
   // Date range filter for credit sales
@@ -138,7 +138,7 @@ const Customers = () => {
     setPaymentAmount('');
     setPaymentMethod('cash');
     setPaymentNotes('');
-    setPaymentDate(new Date().toISOString().split('T')[0]);
+    setPaymentDate(getUgandaDateString());
     await fetchPaymentHistory(creditSale.id);
     setPaymentDialogOpen(true);
   };
@@ -254,9 +254,9 @@ const Customers = () => {
     const matchesSearch = cs.customers?.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       cs.sales?.receipt_number?.toLowerCase().includes(searchTerm.toLowerCase());
     
-    // Get sale date in local timezone
+    // Get sale date in Uganda timezone
     const saleDateStr = cs.sales?.created_at || cs.created_at;
-    const saleDate = new Date(new Date(saleDateStr).toLocaleString('en-US', { timeZone: 'Africa/Kampala' }));
+    const saleDate = toUgandaDate(saleDateStr);
     saleDate.setHours(0, 0, 0, 0);
     
     let matchesDateRange = true;
@@ -371,7 +371,7 @@ const Customers = () => {
                         </div>
                       </TableCell>
                       <TableCell>{customer.company || '-'}</TableCell>
-                      <TableCell>{new Date(customer.created_at).toLocaleDateString()}</TableCell>
+                      <TableCell>{formatUgandaDate(customer.created_at)}</TableCell>
                       <TableCell className="text-right space-x-2">
                         <Button size="icon" variant="ghost" onClick={() => openEditDialog(customer)}><Edit className="h-4 w-4" /></Button>
                         {isAdmin && (
@@ -456,7 +456,7 @@ const Customers = () => {
                 <TableBody>
                   {filteredCreditSales.map(cs => (
                     <TableRow key={cs.id} className={cs.balance > 0 ? 'bg-orange-500/5' : ''}>
-                      <TableCell>{new Date(new Date(cs.sales?.created_at || cs.created_at).toLocaleString('en-US', { timeZone: 'Africa/Kampala' })).toLocaleDateString()}</TableCell>
+                      <TableCell>{formatUgandaDate(cs.sales?.created_at || cs.created_at)}</TableCell>
                       <TableCell className="font-mono text-sm">{cs.sales?.receipt_number}</TableCell>
                       <TableCell>
                         <div>
@@ -563,7 +563,7 @@ const Customers = () => {
                   <div className="space-y-2 max-h-32 overflow-y-auto">
                     {paymentHistory.map(p => (
                       <div key={p.id} className="flex justify-between text-sm p-2 bg-secondary/30 rounded">
-                        <span>{new Date(p.payment_date).toLocaleDateString()} - {p.payment_method}</span>
+                        <span>{formatUgandaDate(p.payment_date)} - {p.payment_method}</span>
                         <span className="font-medium text-green-600">{formatCurrency(p.amount)}</span>
                       </div>
                     ))}

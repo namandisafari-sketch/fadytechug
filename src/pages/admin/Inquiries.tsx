@@ -12,6 +12,7 @@ import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { MessageSquare, Search, Eye, Trash2, Mail, Phone, Building2 } from 'lucide-react';
+import { formatUgandaDate } from '@/lib/utils';
 
 interface Inquiry {
   id: string;
@@ -184,7 +185,7 @@ const Inquiries = () => {
                       {inquiry.priority || 'normal'}
                     </span>
                   </TableCell>
-                  <TableCell>{new Date(inquiry.created_at).toLocaleDateString()}</TableCell>
+                  <TableCell>{formatUgandaDate(inquiry.created_at)}</TableCell>
                   <TableCell className="text-right space-x-2">
                     <Button size="icon" variant="ghost" onClick={() => openViewDialog(inquiry)}><Eye className="h-4 w-4" /></Button>
                     {isAdmin && (

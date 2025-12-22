@@ -13,6 +13,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { Plus, ShoppingBag, Search, Eye, Check, Trash2, Package, Barcode } from 'lucide-react';
 import { formatCurrency } from '@/lib/currency';
+import { formatUgandaDate } from '@/lib/utils';
 
 interface Supplier {
   id: string;
@@ -547,7 +548,7 @@ const PurchaseOrders = () => {
                     </Badge>
                   </TableCell>
                   <TableCell className="text-right">{formatCurrency(order.total_amount)}</TableCell>
-                  <TableCell>{new Date(order.created_at).toLocaleDateString()}</TableCell>
+                  <TableCell>{formatUgandaDate(order.created_at)}</TableCell>
                   <TableCell className="text-right">
                     <Button size="icon" variant="ghost" onClick={() => viewOrder(order.id)}>
                       <Eye className="h-4 w-4" />
@@ -584,7 +585,7 @@ const PurchaseOrders = () => {
                 </div>
                 <div>
                   <p className="text-sm text-muted-foreground">Created</p>
-                  <p>{new Date(selectedOrder.created_at).toLocaleDateString()}</p>
+                  <p>{formatUgandaDate(selectedOrder.created_at)}</p>
                 </div>
                 <div>
                   <p className="text-sm text-muted-foreground">Total</p>

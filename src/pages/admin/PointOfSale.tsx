@@ -14,7 +14,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { formatCurrency } from '@/lib/currency';
 import { QRCodeSVG } from 'qrcode.react';
 import { format } from 'date-fns';
-import { cn } from '@/lib/utils';
+import { cn, getUgandaDateString, formatUgandaDateTime } from '@/lib/utils';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 interface Product {
@@ -897,7 +897,7 @@ const PointOfSale = () => {
                   <h2 className="font-bold text-lg">FADY TECHNOLOGIES</h2>
                   <p className="text-muted-foreground text-xs">Network Equipment Store</p>
                   <p className="text-xs text-muted-foreground mt-1">Receipt #{lastSale.receipt_number}</p>
-                  <p className="text-xs text-muted-foreground">{new Date(lastSale.created_at).toLocaleString()}</p>
+                  <p className="text-xs text-muted-foreground">{formatUgandaDateTime(lastSale.created_at)}</p>
                 </div>
               </div>
 
