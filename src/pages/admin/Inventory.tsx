@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import { Textarea } from '@/components/ui/textarea';
 import { formatCurrency } from '@/lib/currency';
+import { formatUgandaDate, formatUgandaDateTime } from '@/lib/utils';
 
 interface Product {
   id: string;
@@ -1255,9 +1256,9 @@ const Inventory = () => {
                   {transactions.map(tx => (
                     <TableRow key={tx.id}>
                       <TableCell className="text-sm">
-                        <div>{new Date(tx.created_at).toLocaleDateString()}</div>
+                        <div>{formatUgandaDate(tx.created_at)}</div>
                         <div className="text-xs text-muted-foreground">
-                          {new Date(tx.created_at).toLocaleTimeString()}
+                          {new Date(tx.created_at).toLocaleTimeString('en-US', { timeZone: 'Africa/Kampala' })}
                         </div>
                       </TableCell>
                       <TableCell className="font-medium">{tx.products?.name}</TableCell>

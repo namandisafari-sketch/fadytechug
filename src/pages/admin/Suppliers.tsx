@@ -14,6 +14,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { Truck, Plus, Edit, Trash2, Search, CreditCard, Receipt, Printer, History } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
 import { formatCurrency } from '@/lib/currency';
+import { getUgandaDateString } from '@/lib/utils';
 import { format } from 'date-fns';
 import fadyLogo from '@/assets/fady-logo.png';
 import { QRCodeSVG } from 'qrcode.react';
@@ -75,7 +76,7 @@ const Suppliers = () => {
   const [paymentSupplier, setPaymentSupplier] = useState<Supplier | null>(null);
   const [purchaseOrders, setPurchaseOrders] = useState<PurchaseOrder[]>([]);
   const [paymentAmount, setPaymentAmount] = useState('');
-  const [paymentDate, setPaymentDate] = useState(format(new Date(), 'yyyy-MM-dd'));
+  const [paymentDate, setPaymentDate] = useState(getUgandaDateString());
   const [paymentMethod, setPaymentMethod] = useState('bank_transfer');
   const [bankName, setBankName] = useState('');
   const [referenceNumber, setReferenceNumber] = useState('');
@@ -166,7 +167,7 @@ const Suppliers = () => {
 
   const resetPaymentForm = () => {
     setPaymentAmount('');
-    setPaymentDate(format(new Date(), 'yyyy-MM-dd'));
+    setPaymentDate(getUgandaDateString());
     setPaymentMethod('bank_transfer');
     setPaymentSource('bank');
     setBankName('');
@@ -189,8 +190,7 @@ const Suppliers = () => {
   };
 
   const generateReceiptNumber = () => {
-    const date = new Date();
-    const dateStr = format(date, 'yyyyMMdd');
+    const dateStr = getUgandaDateString().replace(/-/g, '');
     const random = Math.floor(Math.random() * 10000).toString().padStart(4, '0');
     return `SPR-${dateStr}-${random}`;
   };

@@ -11,6 +11,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { Building2, Plus, Wallet, ArrowUpRight, ArrowDownRight, XCircle, CheckCircle } from 'lucide-react';
 import { formatCurrency } from '@/lib/currency';
+import { getUgandaDateString, formatUgandaDate, formatUgandaDateTime } from '@/lib/utils';
 
 interface BankSettings {
   bankName: string;
@@ -334,7 +335,7 @@ const Banking = () => {
           account_number: bankSettings.accountNumber || null,
           deposit_date: today,
           reference_number: `SHIFT-${today}`,
-          notes: `Automatic deposit from shift close - ${new Date().toLocaleString()}`,
+          notes: `Automatic deposit from shift close - ${formatUgandaDateTime(new Date().toISOString())}`,
           deposited_by: user?.id
         });
 
