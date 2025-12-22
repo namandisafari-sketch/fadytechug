@@ -28,6 +28,7 @@ interface Stats {
   exchangeCount: number;
   creditPaymentsCollected: number;
   creditPaymentsCount: number;
+  cashDrawerBalance: number;
 }
 
 interface CreditCustomer {
@@ -39,24 +40,25 @@ interface CreditCustomer {
 const Dashboard = () => {
   const navigate = useNavigate();
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
-  const [stats, setStats] = useState<Stats>({
-    totalProducts: 0,
-    activeProducts: 0,
-    totalInquiries: 0,
-    newInquiries: 0,
-    totalCustomers: 0,
-    todayCashSales: 0,
-    todayCreditSales: 0,
-    todayTransactions: 0,
-    todayExpenses: 0,
-    outstandingCredit: 0,
-    creditCustomers: 0,
-    exchangeTopUps: 0,
-    exchangeRefunds: 0,
-    exchangeCount: 0,
-    creditPaymentsCollected: 0,
-    creditPaymentsCount: 0
-  });
+   const [stats, setStats] = useState<Stats>({
+     totalProducts: 0,
+     activeProducts: 0,
+     totalInquiries: 0,
+     newInquiries: 0,
+     totalCustomers: 0,
+     todayCashSales: 0,
+     todayCreditSales: 0,
+     todayTransactions: 0,
+     todayExpenses: 0,
+     outstandingCredit: 0,
+     creditCustomers: 0,
+     exchangeTopUps: 0,
+     exchangeRefunds: 0,
+     exchangeCount: 0,
+     creditPaymentsCollected: 0,
+     creditPaymentsCount: 0,
+     cashDrawerBalance: 0,
+   });
   const [creditCustomers, setCreditCustomers] = useState<CreditCustomer[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -135,6 +137,12 @@ const Dashboard = () => {
       // Credit payments collected for the day
       const creditPaymentsCollected = creditPaymentsRes.data?.reduce((sum, p) => sum + p.amount, 0) || 0;
       const creditPaymentsCount = creditPaymentsRes.data?.length || 0;
+
+      // Depositable cash approximation for the day (matches shift cash logic excluding outstanding credit):
+      // cash sales + credit payments + exchange top-ups - expenses - exchange refunds
+      // NOTE: refunds are not included here because Dashboard doesn't load refunds.
+      const cashDrawerBalance =
+        todayCashSales + creditPaymentsCollected + exchangeTopUps - todayExpenses - exchangeRefunds;
       
       // Outstanding credit for the selected date (uncollected balances with balance > 0)
       const outstandingCreditData = creditSalesForDate.data?.filter((c: any) => c.balance > 0) || [];
@@ -175,7 +183,8 @@ const Dashboard = () => {
         exchangeRefunds,
         exchangeCount,
         creditPaymentsCollected,
-        creditPaymentsCount
+        creditPaymentsCount,
+        cashDrawerBalance,
       });
     } catch (error) {
       console.error('Error fetching stats:', error);
