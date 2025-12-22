@@ -29,7 +29,8 @@ import {
   CreditCard,
   PaintBucket,
   PackageCheck,
-  Download
+  Download,
+  ArrowLeftRight
 } from 'lucide-react';
 import { useState } from 'react';
 import { cn } from '@/lib/utils';
@@ -44,6 +45,7 @@ const navItems = [
   { path: '/admin/barcodes', icon: Barcode, label: 'Barcode Tracking' },
   { path: '/admin/stock-receiving', icon: PackageCheck, label: 'Stock Receiving' },
   { path: '/admin/sales', icon: Receipt, label: 'Sales & Refunds' },
+  { path: '/admin/exchanges', icon: ArrowLeftRight, label: 'Returns & Exchanges' },
   { path: '/admin/purchase-orders', icon: ShoppingBag, label: 'Purchase Orders' },
   { path: '/admin/expenses', icon: Wallet, label: 'Expenses' },
   { path: '/admin/suppliers', icon: Truck, label: 'Suppliers & Payments' },

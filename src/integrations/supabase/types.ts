@@ -226,6 +226,74 @@ export type Database = {
         }
         Relationships: []
       }
+      exchanges: {
+        Row: {
+          amount_paid: number | null
+          created_at: string
+          customer_name: string | null
+          difference_amount: number | null
+          exchange_type: string
+          id: string
+          new_items: Json | null
+          new_value: number | null
+          notes: string | null
+          original_receipt_number: string
+          original_sale_id: string | null
+          payment_method: string | null
+          processed_by: string | null
+          reason: string
+          refund_given: number | null
+          returned_items: Json
+          returned_value: number
+        }
+        Insert: {
+          amount_paid?: number | null
+          created_at?: string
+          customer_name?: string | null
+          difference_amount?: number | null
+          exchange_type?: string
+          id?: string
+          new_items?: Json | null
+          new_value?: number | null
+          notes?: string | null
+          original_receipt_number: string
+          original_sale_id?: string | null
+          payment_method?: string | null
+          processed_by?: string | null
+          reason: string
+          refund_given?: number | null
+          returned_items?: Json
+          returned_value?: number
+        }
+        Update: {
+          amount_paid?: number | null
+          created_at?: string
+          customer_name?: string | null
+          difference_amount?: number | null
+          exchange_type?: string
+          id?: string
+          new_items?: Json | null
+          new_value?: number | null
+          notes?: string | null
+          original_receipt_number?: string
+          original_sale_id?: string | null
+          payment_method?: string | null
+          processed_by?: string | null
+          reason?: string
+          refund_given?: number | null
+          returned_items?: Json
+          returned_value?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "exchanges_original_sale_id_fkey"
+            columns: ["original_sale_id"]
+            isOneToOne: false
+            referencedRelation: "sales"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       expenses: {
         Row: {
           amount: number
