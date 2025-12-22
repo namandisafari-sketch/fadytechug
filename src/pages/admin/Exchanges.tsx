@@ -116,7 +116,7 @@ const Exchanges = () => {
   // Reason and payment
   const [reason, setReason] = useState('');
   const [paymentMethod, setPaymentMethod] = useState('cash');
-  const [cashDate, setCashDate] = useState<Date>(new Date());
+  const [cashDate, setCashDate] = useState<Date | undefined>(undefined);
   const [processing, setProcessing] = useState(false);
   
   // View exchange details
@@ -270,6 +270,15 @@ const Exchanges = () => {
   const processExchange = async () => {
     if (!selectedSale || !reason.trim()) {
       toast({ title: 'Error', description: 'Please provide a reason', variant: 'destructive' });
+      return;
+    }
+
+    if (!cashDate) {
+      toast({
+        title: 'Missing date',
+        description: 'Please select the exchange date to record the top-up/refund.',
+        variant: 'destructive'
+      });
       return;
     }
 
@@ -442,8 +451,8 @@ const Exchanges = () => {
       toast({ 
         title: 'Success', 
         description: exchangeType === 'exchange' 
-          ? `Exchange processed. ${difference > 0 ? `Customer paid ${formatCurrency(difference)} top-up (added to ${format(cashDate, 'MMM d, yyyy')} cash)` : difference < 0 ? `Refunded ${formatCurrency(Math.abs(difference))} to customer` : 'Even exchange'}`
-          : `Refund of ${formatCurrency(returnedValue)} processed (recorded on ${format(cashDate, 'MMM d, yyyy')})`
+          ? `Exchange processed. ${difference > 0 ? `Customer paid ${formatCurrency(difference)} top-up (shown on Dashboard for ${format(cashDate!, 'MMM d, yyyy')})` : difference < 0 ? `Refunded ${formatCurrency(Math.abs(difference))} to customer` : 'Even exchange'}`
+          : `Refund of ${formatCurrency(returnedValue)} processed (shown on Dashboard for ${format(cashDate!, 'MMM d, yyyy')})`
       });
       
       resetDialog();
@@ -468,7 +477,7 @@ const Exchanges = () => {
     setExchangeType('exchange');
     setReason('');
     setPaymentMethod('cash');
-    setCashDate(new Date());
+    setCashDate(undefined);
     setProductSearch('');
   };
 
@@ -873,7 +882,7 @@ const Exchanges = () => {
                     </Select>
                   </div>
                   <div className="space-y-2">
-                    <Label>Record to Cash Date</Label>
+                    <Label>Exchange Date *</Label>
                     <Popover>
                       <PopoverTrigger asChild>
                         <Button
@@ -884,21 +893,21 @@ const Exchanges = () => {
                           )}
                         >
                           <CalendarIcon className="mr-2 h-4 w-4" />
-                          {cashDate ? format(cashDate, "PPP") : <span>Pick a date</span>}
+                          {cashDate ? format(cashDate, "PPP") : <span>Pick exchange date</span>}
                         </Button>
                       </PopoverTrigger>
                       <PopoverContent className="w-auto p-0" align="start">
                         <Calendar
                           mode="single"
                           selected={cashDate}
-                          onSelect={(date) => date && setCashDate(date)}
+                          onSelect={(date) => setCashDate(date ?? undefined)}
                           initialFocus
                           className="p-3 pointer-events-auto"
                         />
                       </PopoverContent>
                     </Popover>
                     <p className="text-xs text-muted-foreground">
-                      Top-up/refund will be recorded in this date's cash register
+                      Dashboard top-ups/refunds will appear on this selected date.
                     </p>
                   </div>
                 </div>
@@ -906,7 +915,7 @@ const Exchanges = () => {
 
               {getDifference() === 0 && exchangeType === 'refund' && (
                 <div className="space-y-2">
-                  <Label>Record to Cash Date</Label>
+                  <Label>Exchange Date *</Label>
                   <Popover>
                     <PopoverTrigger asChild>
                       <Button
@@ -917,21 +926,21 @@ const Exchanges = () => {
                         )}
                       >
                         <CalendarIcon className="mr-2 h-4 w-4" />
-                        {cashDate ? format(cashDate, "PPP") : <span>Pick a date</span>}
+                        {cashDate ? format(cashDate, "PPP") : <span>Pick exchange date</span>}
                       </Button>
                     </PopoverTrigger>
                     <PopoverContent className="w-auto p-0" align="start">
                       <Calendar
                         mode="single"
                         selected={cashDate}
-                        onSelect={(date) => date && setCashDate(date)}
+                        onSelect={(date) => setCashDate(date ?? undefined)}
                         initialFocus
                         className="p-3 pointer-events-auto"
                       />
                     </PopoverContent>
                   </Popover>
                   <p className="text-xs text-muted-foreground">
-                    Refund will be recorded in this date's cash register
+                    Dashboard refund will appear on this selected date.
                   </p>
                 </div>
               )}
