@@ -31,6 +31,7 @@ import StockReceiving from "./pages/admin/StockReceiving";
 import DataBackup from "./pages/admin/DataBackup";
 import StaffManagement from "./pages/admin/StaffManagement";
 import SiteAppearance from "./pages/admin/SiteAppearance";
+import PrintableGuide from "./pages/PrintableGuide";
 
 const queryClient = new QueryClient();
 
@@ -51,6 +52,7 @@ function AppContent() {
           <Route path="/product/:id" element={<ProductDetail />} />
           <Route path="/install" element={<Install />} />
           <Route path="/auth" element={<Auth />} />
+          <Route path="/guide" element={<PrintableGuide />} />
           
           {/* Admin Routes */}
           <Route path="/admin" element={<AdminLayout />}>
