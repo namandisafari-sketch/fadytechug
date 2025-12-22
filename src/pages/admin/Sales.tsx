@@ -641,8 +641,13 @@ const Sales = () => {
 
   const statsDay = dateFilter || getLocalDateString(new Date());
   const { startIso: statsStartIso, endIso: statsEndIso } = getLocalDayRangeIso(statsDay);
+  const statsStartMs = new Date(statsStartIso).getTime();
+  const statsEndMs = new Date(statsEndIso).getTime();
 
-  const daySales = sales.filter((s) => s.created_at >= statsStartIso && s.created_at <= statsEndIso);
+  const daySales = sales.filter((s) => {
+    const t = new Date(s.created_at).getTime();
+    return t >= statsStartMs && t <= statsEndMs;
+  });
 
   // Cash received for the day:
   // - all non-credit sales
@@ -653,11 +658,16 @@ const Sales = () => {
   const dayCashReceivedSales = daySales.filter((s) => s.payment_method !== 'credit').concat(dayPaidCreditSales);
 
   const dayCashReceivedTotal = dayCashReceivedSales.reduce((sum, s) => sum + s.total, 0);
+
+  // Outstanding credit for sales on the selected day (sum of current balances)
   const dayCreditOutstandingTotal = daySales
     .filter((s) => s.payment_method === 'credit' && (s.credit_balance ?? 0) > 0)
-    .reduce((sum, s) => sum + s.total, 0);
+    .reduce((sum, s) => sum + (s.credit_balance ?? 0), 0);
 
-  const statsRefunds = refunds.filter((r) => r.created_at >= statsStartIso && r.created_at <= statsEndIso);
+  const statsRefunds = refunds.filter((r) => {
+    const t = new Date(r.created_at).getTime();
+    return t >= statsStartMs && t <= statsEndMs;
+  });
   const dayRefundsTotal = statsRefunds.reduce((sum, r) => sum + r.amount, 0);
 
   const dayNetCashTotal = dayCashReceivedTotal - dayRefundsTotal - expensesTotal;
