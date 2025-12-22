@@ -91,6 +91,10 @@ const Sales = () => {
   const [dateFilter, setDateFilter] = useState('');
   const [loading, setLoading] = useState(true);
   const [isAdmin, setIsAdmin] = useState(false);
+
+  // Depositable cash (matches POS end-of-day calculation)
+  const [cashDrawerBalance, setCashDrawerBalance] = useState(0);
+
   const [creditPaymentsTotal, setCreditPaymentsTotal] = useState(0);
   const [creditPaymentsCount, setCreditPaymentsCount] = useState(0);
   const [expensesTotal, setExpensesTotal] = useState(0);
@@ -137,6 +141,7 @@ const Sales = () => {
     checkAdminStatus();
     fetchCreditPayments();
     fetchExchanges();
+    fetchCashDrawerBalance();
   }, [dateFilter]);
 
   // Real-time subscriptions for live updates
@@ -149,6 +154,7 @@ const Sales = () => {
         () => {
           fetchSales();
           fetchDeletedSales();
+          fetchCashDrawerBalance();
         }
       )
       .on(
@@ -156,6 +162,7 @@ const Sales = () => {
         { event: '*', schema: 'public', table: 'refunds' },
         () => {
           fetchRefunds();
+          fetchCashDrawerBalance();
         }
       )
       .on(
@@ -163,6 +170,7 @@ const Sales = () => {
         { event: '*', schema: 'public', table: 'expenses' },
         () => {
           fetchExpensesTotal();
+          fetchCashDrawerBalance();
         }
       )
       .on(
@@ -170,6 +178,7 @@ const Sales = () => {
         { event: '*', schema: 'public', table: 'credit_payments' },
         () => {
           fetchCreditPayments();
+          fetchCashDrawerBalance();
         }
       )
       .on(
@@ -184,6 +193,7 @@ const Sales = () => {
         { event: '*', schema: 'public', table: 'exchanges' },
         () => {
           fetchExchanges();
+          fetchCashDrawerBalance();
         }
       )
       .subscribe();
@@ -309,6 +319,76 @@ const Sales = () => {
     setExchangeTopUps(topUps);
     setExchangeRefunds(refunds);
     setExchangeCount(data?.length || 0);
+  };
+
+  // Match POS end-of-day depositable cash calculation
+  const fetchCashDrawerBalance = async () => {
+    const day = dateFilter || getLocalDateString(new Date());
+
+    const startTs = `${day}T00:00:00+03:00`;
+    const endTs = `${day}T23:59:59+03:00`;
+
+    const [{ data: cashSalesData }, { data: refundsData }, { data: cashExpensesData }, { data: supplierPaymentsData }, { data: depositsData }, { data: exchangesData }, { data: cashCreditPaymentsData }] =
+      await Promise.all([
+        supabase
+          .from('sales')
+          .select('total')
+          .is('deleted_at', null)
+          .eq('payment_method', 'cash')
+          .gte('created_at', startTs)
+          .lte('created_at', endTs),
+        supabase
+          .from('refunds')
+          .select('amount')
+          .is('deleted_at', null)
+          .gte('created_at', startTs)
+          .lte('created_at', endTs),
+        supabase.from('expenses').select('amount').eq('expense_date', day).eq('payment_source', 'cash_register'),
+        supabase.from('supplier_payments').select('amount').eq('payment_date', day).eq('payment_source', 'cash_register'),
+        supabase.from('bank_deposits').select('amount').eq('deposit_date', day),
+        supabase.from('exchanges').select('amount_paid, refund_given').eq('cash_date', day),
+        supabase
+          .from('credit_payments')
+          .select('amount')
+          .eq('payment_method', 'cash')
+          .gte('payment_date', startTs)
+          .lte('payment_date', endTs),
+      ]);
+
+    const totalCashSales = cashSalesData?.reduce((sum, s) => sum + s.total, 0) || 0;
+    const totalRefunds = refundsData?.reduce((sum, r) => sum + r.amount, 0) || 0;
+    const totalCashExpenses = cashExpensesData?.reduce((sum, e) => sum + e.amount, 0) || 0;
+    const totalCashSupplierPayments = supplierPaymentsData?.reduce((sum, p) => sum + p.amount, 0) || 0;
+    const totalDepositsForDay = depositsData?.reduce((sum, d) => sum + d.amount, 0) || 0;
+    const totalExchangeTopUps = exchangesData?.reduce((sum, e) => sum + (e.amount_paid || 0), 0) || 0;
+    const totalExchangeRefunds = exchangesData?.reduce((sum, e) => sum + (e.refund_given || 0), 0) || 0;
+    const totalCashCreditPayments = cashCreditPaymentsData?.reduce((sum, p) => sum + p.amount, 0) || 0;
+
+    // Opening balance = previous day's closing
+    const prev = new Date(`${day}T12:00:00`);
+    prev.setDate(prev.getDate() - 1);
+    const prevDay = getLocalDateString(prev);
+
+    const { data: prevRegister } = await supabase
+      .from('cash_register')
+      .select('closing_balance')
+      .eq('date', prevDay)
+      .maybeSingle();
+
+    const openingBalance = prevRegister?.closing_balance || 0;
+
+    const balance =
+      openingBalance +
+      totalCashSales +
+      totalCashCreditPayments +
+      totalExchangeTopUps -
+      totalRefunds -
+      totalExchangeRefunds -
+      totalCashExpenses -
+      totalCashSupplierPayments -
+      totalDepositsForDay;
+
+    setCashDrawerBalance(balance);
   };
 
   const viewSaleDetails = async (sale: Sale) => {
@@ -670,7 +750,9 @@ const Sales = () => {
   });
   const dayRefundsTotal = statsRefunds.reduce((sum, r) => sum + r.amount, 0);
 
-  const dayNetCashTotal = dayCashReceivedTotal - dayRefundsTotal - expensesTotal;
+  // Depositable cash (matches POS End Day):
+  // opening + cash sales + cash credit payments + exchange top-ups - refunds - exchange refunds - cash expenses - cash supplier payments - deposits
+  const dayNetCashTotal = cashDrawerBalance;
 
   // For filtered view (table showing)
   const cashSales = sales.filter((s) => s.payment_method !== 'credit' || s.credit_balance === 0);
@@ -731,12 +813,14 @@ const Sales = () => {
 
         <Card className="border-purple-500/30 bg-purple-500/10">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Net Cash (After Refunds & Expenses)</CardTitle>
+            <CardTitle className="text-sm font-medium text-muted-foreground">Net Cash (Depositable)</CardTitle>
             <TrendingUp className="h-5 w-5 text-purple-600" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-purple-600">{formatCurrency(dayNetCashTotal)}</div>
-            <p className="text-xs text-muted-foreground mt-1">Actual cash remaining</p>
+            <p className="text-xs text-muted-foreground mt-1">
+              Cash available to deposit (incl. top-ups & credit payments; excl. refunds, exchange refunds, expenses)
+            </p>
           </CardContent>
         </Card>
 
