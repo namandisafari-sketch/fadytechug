@@ -127,6 +127,53 @@ const Sales = () => {
     fetchCreditPayments();
   }, [dateFilter]);
 
+  // Real-time subscriptions for live updates
+  useEffect(() => {
+    const channel = supabase
+      .channel('sales-page-updates')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'sales' },
+        () => {
+          fetchSales();
+          fetchDeletedSales();
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'refunds' },
+        () => {
+          fetchRefunds();
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'expenses' },
+        () => {
+          fetchExpensesTotal();
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'credit_payments' },
+        () => {
+          fetchCreditPayments();
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'credit_sales' },
+        () => {
+          fetchSales();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [dateFilter]);
+
   const checkAdminStatus = async () => {
     if (!user?.id) return;
     const { data } = await supabase
