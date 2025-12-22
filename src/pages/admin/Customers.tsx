@@ -391,7 +391,7 @@ const Customers = () => {
                 <TableBody>
                   {filteredCreditSales.map(cs => (
                     <TableRow key={cs.id} className={cs.balance > 0 ? 'bg-orange-500/5' : ''}>
-                      <TableCell>{new Date(cs.created_at).toLocaleDateString()}</TableCell>
+                      <TableCell>{new Date(new Date(cs.created_at).toLocaleString('en-US', { timeZone: 'Africa/Kampala' })).toLocaleDateString()}</TableCell>
                       <TableCell className="font-mono text-sm">{cs.sales?.receipt_number}</TableCell>
                       <TableCell>
                         <div>
