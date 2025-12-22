@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { format } from 'date-fns';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -9,11 +10,14 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Calendar } from '@/components/ui/calendar';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
-import { Plus, Users, Edit, Trash2, Search, Mail, Phone, CreditCard, DollarSign } from 'lucide-react';
+import { Plus, Users, Edit, Trash2, Search, Mail, Phone, CreditCard, DollarSign, CalendarIcon, X } from 'lucide-react';
 import { formatCurrency } from '@/lib/currency';
+import { cn } from '@/lib/utils';
 
 interface Customer {
   id: string;
@@ -73,6 +77,10 @@ const Customers = () => {
   const [paymentNotes, setPaymentNotes] = useState('');
   const [paymentDate, setPaymentDate] = useState(new Date().toISOString().split('T')[0]);
   const [paymentHistory, setPaymentHistory] = useState<CreditPayment[]>([]);
+
+  // Date range filter for credit sales
+  const [startDate, setStartDate] = useState<Date | undefined>(undefined);
+  const [endDate, setEndDate] = useState<Date | undefined>(undefined);
 
   useEffect(() => {
     fetchCustomers();
@@ -242,12 +250,36 @@ const Customers = () => {
     (c.company?.toLowerCase() || '').includes(searchTerm.toLowerCase())
   );
 
-  const filteredCreditSales = creditSales.filter(cs =>
-    cs.customers?.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    cs.sales?.receipt_number?.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredCreditSales = creditSales.filter(cs => {
+    const matchesSearch = cs.customers?.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      cs.sales?.receipt_number?.toLowerCase().includes(searchTerm.toLowerCase());
+    
+    // Get sale date in local timezone
+    const saleDateStr = cs.sales?.created_at || cs.created_at;
+    const saleDate = new Date(new Date(saleDateStr).toLocaleString('en-US', { timeZone: 'Africa/Kampala' }));
+    saleDate.setHours(0, 0, 0, 0);
+    
+    let matchesDateRange = true;
+    if (startDate) {
+      const start = new Date(startDate);
+      start.setHours(0, 0, 0, 0);
+      matchesDateRange = matchesDateRange && saleDate >= start;
+    }
+    if (endDate) {
+      const end = new Date(endDate);
+      end.setHours(23, 59, 59, 999);
+      matchesDateRange = matchesDateRange && saleDate <= end;
+    }
+    
+    return matchesSearch && matchesDateRange;
+  });
 
-  const outstandingTotal = creditSales.filter(cs => cs.balance > 0).reduce((sum, cs) => sum + cs.balance, 0);
+  const clearDateFilters = () => {
+    setStartDate(undefined);
+    setEndDate(undefined);
+  };
+
+  const outstandingTotal = filteredCreditSales.filter(cs => cs.balance > 0).reduce((sum, cs) => sum + cs.balance, 0);
 
   return (
     <div className="space-y-6">
@@ -362,16 +394,49 @@ const Customers = () => {
         <TabsContent value="credit">
           <Card>
             <CardHeader>
-              <CardTitle className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <CreditCard className="h-5 w-5" />
-                  Credit Sales
-                </div>
-                {outstandingTotal > 0 && (
-                  <div className="text-orange-600">
-                    Total Outstanding: <span className="font-bold">{formatCurrency(outstandingTotal)}</span>
+              <CardTitle className="flex flex-col gap-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <CreditCard className="h-5 w-5" />
+                    Credit Sales
                   </div>
-                )}
+                  {outstandingTotal > 0 && (
+                    <div className="text-orange-600">
+                      Total Outstanding: <span className="font-bold">{formatCurrency(outstandingTotal)}</span>
+                    </div>
+                  )}
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button variant="outline" size="sm" className={cn("justify-start text-left font-normal", !startDate && "text-muted-foreground")}>
+                        <CalendarIcon className="mr-2 h-4 w-4" />
+                        {startDate ? format(startDate, "PPP") : "Start date"}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0" align="start">
+                      <Calendar mode="single" selected={startDate} onSelect={setStartDate} initialFocus className="p-3 pointer-events-auto" />
+                    </PopoverContent>
+                  </Popover>
+                  <span className="text-muted-foreground">to</span>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button variant="outline" size="sm" className={cn("justify-start text-left font-normal", !endDate && "text-muted-foreground")}>
+                        <CalendarIcon className="mr-2 h-4 w-4" />
+                        {endDate ? format(endDate, "PPP") : "End date"}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0" align="start">
+                      <Calendar mode="single" selected={endDate} onSelect={setEndDate} initialFocus className="p-3 pointer-events-auto" />
+                    </PopoverContent>
+                  </Popover>
+                  {(startDate || endDate) && (
+                    <Button variant="ghost" size="sm" onClick={clearDateFilters} className="h-8 px-2">
+                      <X className="h-4 w-4" />
+                      Clear
+                    </Button>
+                  )}
+                </div>
               </CardTitle>
             </CardHeader>
             <CardContent>
