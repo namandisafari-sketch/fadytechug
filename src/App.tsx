@@ -22,7 +22,7 @@ import Inventory from "./pages/admin/Inventory";
 import Sales from "./pages/admin/Sales";
 import Expenses from "./pages/admin/Expenses";
 import Suppliers from "./pages/admin/Suppliers";
-
+import Exchanges from "./pages/admin/Exchanges";
 import Banking from "./pages/admin/Banking";
 import PurchaseOrders from "./pages/admin/PurchaseOrders";
 import Reports from "./pages/admin/Reports";
@@ -64,7 +64,7 @@ function AppContent() {
             <Route path="purchase-orders" element={<PurchaseOrders />} />
             <Route path="expenses" element={<Expenses />} />
             <Route path="suppliers" element={<Suppliers />} />
-            
+            <Route path="exchanges" element={<Exchanges />} />
             <Route path="banking" element={<Banking />} />
             <Route path="reports" element={<Reports />} />
             <Route path="barcodes" element={<Barcodes />} />

@@ -157,6 +157,57 @@ When products arrive from your supplier:
 
 ---
 
+## 🔄 Returns & Exchanges (Top-up Programme)
+
+When a customer brings back a product:
+
+1. Click **"Returns & Exchanges"** in the menu
+2. Click **"New Return/Exchange"**
+
+### Step 1: Find the Original Sale
+
+- Type the receipt number (e.g., RCP-20241220-0001)
+- Click the search icon
+
+### Step 2: Choose What to Do
+
+**Option A - Refund Only:**
+- Customer gets their money back
+- Product goes back to stock
+
+**Option B - Exchange (Top-up Programme):**
+- Customer swaps for a different product
+- If new product costs MORE = Customer pays the difference (top-up)
+- If new product costs LESS = You give them the difference back
+- If same price = Even swap, no money needed
+
+### Step 3: Select Items to Return
+
+- Use **+** and **-** to select how many of each item they're returning
+- You can return some items and keep others
+
+### Step 4: (For Exchange) Select New Items
+
+- Search for the new product
+- Add to cart
+- See the difference amount calculated automatically
+
+### Step 5: Complete
+
+1. Type the reason (e.g., "Customer wants different model")
+2. Choose payment method for any top-up or refund
+3. Click **"Complete Exchange"**
+
+**Stock is updated automatically!**
+
+### Exchange History
+
+- See all past returns and exchanges
+- View details of any exchange
+- Track total top-ups collected
+
+---
+
 ## 👥 How to Manage Customers
 
 1. Click **"Customers"** in the menu
@@ -347,6 +398,7 @@ To save a copy of all your data:
 | Check stock | Inventory |
 | Add stock | Inventory → Quick Stock Entry |
 | See sales | Sales |
+| Return/Exchange product | Returns & Exchanges |
 | Add customer | Customers → Add Customer |
 | Pay supplier | Suppliers → Record Payment |
 | Record expense | Expenses → Add Expense |
