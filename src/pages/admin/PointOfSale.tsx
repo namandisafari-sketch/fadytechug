@@ -171,6 +171,17 @@ const PointOfSale = () => {
     const totalExchangeTopUps = exchangesData?.reduce((sum, e) => sum + (e.amount_paid || 0), 0) || 0;
     const totalExchangeRefunds = exchangesData?.reduce((sum, e) => sum + (e.refund_given || 0), 0) || 0;
 
+    // Get credit payments received in cash for the day (these go into the cash drawer)
+    const { data: creditPaymentsData } = await supabase
+      .from('credit_payments')
+      .select('amount, payment_method')
+      .gte('payment_date', startTs)
+      .lte('payment_date', endTs);
+
+    const totalCashCreditPayments = creditPaymentsData
+      ?.filter((p) => p.payment_method === 'cash')
+      .reduce((sum, p) => sum + p.amount, 0) || 0;
+
     // Get previous day's closing balance (opening balance for target date)
     const previousDay = new Date(targetDate);
     previousDay.setDate(previousDay.getDate() - 1);
@@ -185,10 +196,10 @@ const PointOfSale = () => {
     const openingBalance = previousDayRegister?.closing_balance || 0;
     
     // Physical cash in drawer for the shift (bankable amount):
-    // opening_balance + cash_sales + exchange_top_ups - refunds - exchange_refunds - cash_expenses - cash_supplier_payments - deposits
+    // opening_balance + cash_sales + cash_credit_payments + exchange_top_ups - refunds - exchange_refunds - cash_expenses - cash_supplier_payments - deposits
     // CRITICAL: Deposits are subtracted because once deposited, that money is LOCKED in the bank
     const balance =
-      openingBalance + totalCashSales + totalExchangeTopUps - totalRefunds - totalExchangeRefunds - totalExpenses - totalSupplierPayments - totalDepositsForDay;
+      openingBalance + totalCashSales + totalCashCreditPayments + totalExchangeTopUps - totalRefunds - totalExchangeRefunds - totalExpenses - totalSupplierPayments - totalDepositsForDay;
     setCashRegisterBalance(balance);
   };
 
