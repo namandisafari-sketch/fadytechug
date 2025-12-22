@@ -150,8 +150,24 @@ const Banking = () => {
     const totalCashSales =
       salesData?.filter((s) => s.payment_method === 'cash').reduce((sum, s) => sum + s.total, 0) || 0;
 
-    // NOTE: Credit payments are NOT included in bankable drawer cash.
-    // They are tracked separately.
+    // Credit payments collected (cash coming into drawer)
+    const { data: creditPaymentsData } = await supabase
+      .from('credit_payments')
+      .select('amount, payment_method')
+      .gte('payment_date', startTs)
+      .lte('payment_date', endTs)
+      .eq('payment_method', 'cash');
+
+    const totalCreditPayments = creditPaymentsData?.reduce((sum, p) => sum + p.amount, 0) || 0;
+
+    // Exchange top-ups (extra cash collected from exchanges)
+    const { data: exchangesData } = await supabase
+      .from('exchanges')
+      .select('amount_paid, refund_given')
+      .eq('cash_date', dateStr);
+
+    const totalExchangeTopUps = exchangesData?.reduce((sum, e) => sum + (e.amount_paid || 0), 0) || 0;
+    const totalExchangeRefunds = exchangesData?.reduce((sum, e) => sum + (e.refund_given || 0), 0) || 0;
 
     // Refunds reduce drawer cash
     const { data: refundsData } = await supabase
@@ -209,18 +225,19 @@ const Banking = () => {
     const openingBalance = existingRegister?.opening_balance ?? previousDayRegister?.closing_balance ?? 0;
 
     // Drawer cash for the day (what should be bankable):
-    // opening + cash sales - refunds - cash expenses - cash supplier payments - deposits already made
+    // opening + cash sales + credit payments + exchange top-ups - exchange refunds - refunds - cash expenses - cash supplier payments - deposits already made
     // CRITICAL: Deposits are subtracted because once deposited, that money is LOCKED in the bank
-    const closing =
-      openingBalance + totalCashSales - totalRefunds - totalExpenses - totalSupplierPayments - totalDepositsForDay;
+    const totalInflows = totalCashSales + totalCreditPayments + totalExchangeTopUps;
+    const totalOutflows = totalRefunds + totalExchangeRefunds + totalExpenses + totalSupplierPayments + totalDepositsForDay;
+    const closing = openingBalance + totalInflows - totalOutflows;
 
     if (existingRegister) {
       await supabase
         .from('cash_register')
         .update({
           opening_balance: openingBalance,
-          total_sales: totalCashSales,
-          total_refunds: totalRefunds,
+          total_sales: totalInflows,
+          total_refunds: totalRefunds + totalExchangeRefunds,
           total_expenses: totalExpenses,
           total_deposits: totalDepositsForDay,
           closing_balance: closing,
@@ -230,8 +247,8 @@ const Banking = () => {
       setCashRegister({
         ...existingRegister,
         opening_balance: openingBalance,
-        total_sales: totalCashSales,
-        total_refunds: totalRefunds,
+        total_sales: totalInflows,
+        total_refunds: totalRefunds + totalExchangeRefunds,
         total_expenses: totalExpenses,
         total_deposits: totalDepositsForDay,
         closing_balance: closing,
@@ -242,8 +259,8 @@ const Banking = () => {
         .insert({
           date: dateStr,
           opening_balance: openingBalance,
-          total_sales: totalCashSales,
-          total_refunds: totalRefunds,
+          total_sales: totalInflows,
+          total_refunds: totalRefunds + totalExchangeRefunds,
           total_expenses: totalExpenses,
           total_deposits: totalDepositsForDay,
           closing_balance: closing,

@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Package, MessageSquare, Users, Banknote, CreditCard, CalendarIcon, Receipt, Wallet, ArrowLeftRight, RefreshCw } from 'lucide-react';
+import { Package, MessageSquare, Users, Banknote, CreditCard, CalendarIcon, Receipt, Wallet, ArrowLeftRight, RefreshCw, HandCoins } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { formatCurrency } from '@/lib/currency';
 import { Badge } from '@/components/ui/badge';
@@ -26,6 +26,8 @@ interface Stats {
   exchangeTopUps: number;
   exchangeRefunds: number;
   exchangeCount: number;
+  creditPaymentsCollected: number;
+  creditPaymentsCount: number;
 }
 
 interface CreditCustomer {
@@ -51,7 +53,9 @@ const Dashboard = () => {
     creditCustomers: 0,
     exchangeTopUps: 0,
     exchangeRefunds: 0,
-    exchangeCount: 0
+    exchangeCount: 0,
+    creditPaymentsCollected: 0,
+    creditPaymentsCount: 0
   });
   const [creditCustomers, setCreditCustomers] = useState<CreditCustomer[]>([]);
   const [loading, setLoading] = useState(true);
@@ -67,7 +71,7 @@ const Dashboard = () => {
       endOfDay.setHours(23, 59, 59, 999);
       const dateStr = format(selectedDate, 'yyyy-MM-dd');
       
-      const [productsRes, inquiriesRes, customersRes, salesRes, expensesRes, exchangesRes] = await Promise.all([
+      const [productsRes, inquiriesRes, customersRes, salesRes, expensesRes, exchangesRes, creditPaymentsRes] = await Promise.all([
         supabase.from('products').select('id, is_active'),
         supabase.from('inquiries').select('id, status'),
         supabase.from('customers').select('id'),
@@ -79,7 +83,11 @@ const Dashboard = () => {
           .eq('expense_date', dateStr),
         supabase.from('exchanges')
           .select('id, amount_paid, refund_given, exchange_type, cash_date')
-          .eq('cash_date', dateStr)
+          .eq('cash_date', dateStr),
+        supabase.from('credit_payments')
+          .select('id, amount, payment_method, payment_date')
+          .gte('payment_date', startOfDay.toISOString())
+          .lte('payment_date', endOfDay.toISOString())
       ]);
 
       // Get sale IDs for credit sales on the selected date
@@ -123,6 +131,10 @@ const Dashboard = () => {
       const exchangeTopUps = exchangesRes.data?.reduce((sum, e) => sum + (e.amount_paid || 0), 0) || 0;
       const exchangeRefunds = exchangesRes.data?.reduce((sum, e) => sum + (e.refund_given || 0), 0) || 0;
       const exchangeCount = exchangesRes.data?.length || 0;
+
+      // Credit payments collected for the day
+      const creditPaymentsCollected = creditPaymentsRes.data?.reduce((sum, p) => sum + p.amount, 0) || 0;
+      const creditPaymentsCount = creditPaymentsRes.data?.length || 0;
       
       // Outstanding credit for the selected date (uncollected balances with balance > 0)
       const outstandingCreditData = creditSalesForDate.data?.filter((c: any) => c.balance > 0) || [];
@@ -161,7 +173,9 @@ const Dashboard = () => {
         creditCustomers: Object.keys(customerBalances).length,
         exchangeTopUps,
         exchangeRefunds,
-        exchangeCount
+        exchangeCount,
+        creditPaymentsCollected,
+        creditPaymentsCount
       });
     } catch (error) {
       console.error('Error fetching stats:', error);
@@ -272,6 +286,16 @@ const Dashboard = () => {
       color: 'text-pink-600',
       bgColor: 'bg-pink-500/10',
       borderColor: 'border-pink-500/30'
+    },
+    {
+      title: `${dateLabel} Credit Payments`,
+      description: 'Payments collected from credit customers',
+      value: formatCurrency(stats.creditPaymentsCollected),
+      subtitle: `${stats.creditPaymentsCount} payments received`,
+      icon: HandCoins,
+      color: 'text-emerald-600',
+      bgColor: 'bg-emerald-500/10',
+      borderColor: 'border-emerald-500/30'
     }
   ];
 
