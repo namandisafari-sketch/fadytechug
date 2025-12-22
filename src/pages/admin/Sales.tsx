@@ -26,6 +26,7 @@ import {
   ArchiveRestore,
   Archive,
   CreditCard,
+  HandCoins,
 } from 'lucide-react';
 import { formatCurrency } from '@/lib/currency';
 import BarcodeScanner from '@/components/BarcodeScanner';
@@ -87,7 +88,8 @@ const Sales = () => {
   const [dateFilter, setDateFilter] = useState('');
   const [loading, setLoading] = useState(true);
   const [isAdmin, setIsAdmin] = useState(false);
-  const [previousDayCreditPayments, setPreviousDayCreditPayments] = useState(0);
+  const [creditPaymentsTotal, setCreditPaymentsTotal] = useState(0);
+  const [creditPaymentsCount, setCreditPaymentsCount] = useState(0);
   const [expensesTotal, setExpensesTotal] = useState(0);
 
   const KAMPALA_OFFSET_MS = 3 * 60 * 60 * 1000;
@@ -122,7 +124,7 @@ const Sales = () => {
     fetchRefunds();
     fetchExpensesTotal();
     checkAdminStatus();
-    fetchPreviousDayCreditPayments();
+    fetchCreditPayments();
   }, [dateFilter]);
 
   const checkAdminStatus = async () => {
@@ -214,25 +216,19 @@ const Sales = () => {
     setExpensesTotal(total);
   };
 
-  const fetchPreviousDayCreditPayments = async () => {
+  const fetchCreditPayments = async () => {
     const day = dateFilter || getKampalaDateString(new Date());
-
-    const [y, m, d] = day.split('-').map(Number);
-    const prevDay = new Date(Date.UTC(y, m - 1, d));
-    prevDay.setUTCDate(prevDay.getUTCDate() - 1);
-    const prevDayStr = getKampalaDateString(prevDay);
-
-    const { startIso, endIso } = getKampalaDayRangeIso(prevDayStr);
+    const { startIso, endIso } = getKampalaDayRangeIso(day);
 
     const { data } = await supabase
       .from('credit_payments')
-      .select('amount, payment_method')
+      .select('amount')
       .gte('payment_date', startIso)
-      .lte('payment_date', endIso)
-      .eq('payment_method', 'cash');
+      .lte('payment_date', endIso);
 
     const total = data?.reduce((sum, p) => sum + p.amount, 0) || 0;
-    setPreviousDayCreditPayments(total);
+    setCreditPaymentsTotal(total);
+    setCreditPaymentsCount(data?.length || 0);
   };
 
   const viewSaleDetails = async (sale: Sale) => {
@@ -603,100 +599,81 @@ const Sales = () => {
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
-        <Card>
-          <CardContent className="pt-6">
-            <div className="flex items-center gap-4">
-              <div className="p-3 bg-green-100 dark:bg-green-900/30 rounded-lg">
-                <DollarSign className="h-6 w-6 text-green-600" />
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">
-                  {dateFilter ? 'Selected Day Cash Sales' : "Today's Cash Sales"}
-                </p>
-                <p className="text-2xl font-bold">{formatCurrency(dayCashReceivedTotal)}</p>
-              </div>
-            </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <Card className="border-green-500/30 bg-green-500/10">
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">
+              {dateFilter ? 'Selected Day Cash Sales' : "Today's Cash Sales"}
+            </CardTitle>
+            <DollarSign className="h-5 w-5 text-green-600" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-green-600">{formatCurrency(dayCashReceivedTotal)}</div>
+            <p className="text-xs text-muted-foreground mt-1">Sales paid by cash, card, mobile money</p>
           </CardContent>
         </Card>
 
-        <Card>
-          <CardContent className="pt-6">
-            <div className="flex items-center gap-4">
-              <div className="p-3 bg-yellow-100 dark:bg-yellow-900/30 rounded-lg">
-                <CreditCard className="h-6 w-6 text-yellow-600" />
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">
-                  {dateFilter ? 'Selected Day Credit Outstanding' : "Today's Credit Outstanding"}
-                </p>
-                <p className="text-2xl font-bold text-yellow-600">{formatCurrency(dayCreditOutstandingTotal)}</p>
-              </div>
-            </div>
+        <Card className="border-yellow-500/30 bg-yellow-500/10">
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">
+              {dateFilter ? 'Selected Day Credit Outstanding' : "Today's Credit Outstanding"}
+            </CardTitle>
+            <CreditCard className="h-5 w-5 text-yellow-600" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-yellow-600">{formatCurrency(dayCreditOutstandingTotal)}</div>
+            <p className="text-xs text-muted-foreground mt-1">Credit sales awaiting payment</p>
           </CardContent>
         </Card>
 
-        <Card>
-          <CardContent className="pt-6">
-            <div className="flex items-center gap-4">
-              <div className="p-3 bg-blue-100 dark:bg-blue-900/30 rounded-lg">
-                <Receipt className="h-6 w-6 text-blue-600" />
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">
-                  {dateFilter ? 'Selected Day Transactions' : "Today's Transactions"}
-                </p>
-                <p className="text-2xl font-bold">{daySales.length}</p>
-              </div>
-            </div>
+        <Card className="border-blue-500/30 bg-blue-500/10">
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">
+              {dateFilter ? 'Selected Day Transactions' : "Today's Transactions"}
+            </CardTitle>
+            <Receipt className="h-5 w-5 text-blue-600" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-blue-600">{daySales.length}</div>
+            <p className="text-xs text-muted-foreground mt-1">Total transactions processed</p>
           </CardContent>
         </Card>
 
-        <Card>
-          <CardContent className="pt-6">
-            <div className="flex items-center gap-4">
-              <div className="p-3 bg-purple-100 dark:bg-purple-900/30 rounded-lg">
-                <TrendingUp className="h-6 w-6 text-purple-600" />
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Net Cash (After Refunds & Expenses)</p>
-                <p className="text-2xl font-bold">{formatCurrency(dayNetCashTotal)}</p>
-              </div>
-            </div>
+        <Card className="border-purple-500/30 bg-purple-500/10">
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">Net Cash (After Refunds & Expenses)</CardTitle>
+            <TrendingUp className="h-5 w-5 text-purple-600" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-purple-600">{formatCurrency(dayNetCashTotal)}</div>
+            <p className="text-xs text-muted-foreground mt-1">Actual cash remaining</p>
           </CardContent>
         </Card>
 
-        <Card>
-          <CardContent className="pt-6">
-            <div className="flex items-center gap-4">
-              <div className="p-3 bg-red-100 dark:bg-red-900/30 rounded-lg">
-                <RotateCcw className="h-6 w-6 text-red-600" />
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Total Refunds</p>
-                <p className="text-2xl font-bold text-red-600">{formatCurrency(totalRefunds)}</p>
-              </div>
-            </div>
+        <Card className="border-red-500/30 bg-red-500/10">
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">Total Refunds</CardTitle>
+            <RotateCcw className="h-5 w-5 text-red-600" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-red-600">{formatCurrency(totalRefunds)}</div>
+            <p className="text-xs text-muted-foreground mt-1">Refunds processed</p>
+          </CardContent>
+        </Card>
+
+        <Card className="border-emerald-500/30 bg-emerald-500/10">
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">
+              {dateFilter ? 'Selected Day Credit Payments' : "Today's Credit Payments"}
+            </CardTitle>
+            <HandCoins className="h-5 w-5 text-emerald-600" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-emerald-600">{formatCurrency(creditPaymentsTotal)}</div>
+            <p className="text-xs text-muted-foreground mt-1">{creditPaymentsCount} payments collected</p>
           </CardContent>
         </Card>
       </div>
-
-      {/* Previous Day Credit Payments Notice */}
-      {previousDayCreditPayments > 0 && (
-        <Card className="border-blue-500/50 bg-blue-500/5">
-          <CardContent className="pt-6">
-            <div className="flex items-center gap-4">
-              <div className="p-3 bg-blue-100 dark:bg-blue-900/30 rounded-lg">
-                <CreditCard className="h-6 w-6 text-blue-600" />
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Credit Payments from Previous Day (Added to Today's Cash)</p>
-                <p className="text-2xl font-bold text-blue-600">{formatCurrency(previousDayCreditPayments)}</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      )}
 
       {/* Filters */}
       <div className="flex flex-col sm:flex-row gap-4">
