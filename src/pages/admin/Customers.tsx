@@ -35,7 +35,7 @@ interface CreditSale {
   status: string;
   notes: string | null;
   created_at: string;
-  sales: { receipt_number: string };
+  sales: { receipt_number: string; created_at: string };
   customers: { name: string; phone: string | null };
 }
 
@@ -91,7 +91,7 @@ const Customers = () => {
   const fetchCreditSales = async () => {
     const { data, error } = await supabase
       .from('credit_sales')
-      .select('*, sales(receipt_number), customers(name, phone)')
+      .select('*, sales(receipt_number, created_at), customers(name, phone)')
       .order('created_at', { ascending: false });
 
     if (!error) setCreditSales(data || []);
@@ -391,7 +391,7 @@ const Customers = () => {
                 <TableBody>
                   {filteredCreditSales.map(cs => (
                     <TableRow key={cs.id} className={cs.balance > 0 ? 'bg-orange-500/5' : ''}>
-                      <TableCell>{new Date(new Date(cs.created_at).toLocaleString('en-US', { timeZone: 'Africa/Kampala' })).toLocaleDateString()}</TableCell>
+                      <TableCell>{new Date(new Date(cs.sales?.created_at || cs.created_at).toLocaleString('en-US', { timeZone: 'Africa/Kampala' })).toLocaleDateString()}</TableCell>
                       <TableCell className="font-mono text-sm">{cs.sales?.receipt_number}</TableCell>
                       <TableCell>
                         <div>
