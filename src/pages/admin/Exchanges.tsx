@@ -10,9 +10,13 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Calendar } from '@/components/ui/calendar';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
+import { format } from 'date-fns';
+import { cn } from '@/lib/utils';
 import {
   Search,
   ArrowLeftRight,
@@ -23,6 +27,7 @@ import {
   DollarSign,
   RefreshCw,
   Eye,
+  CalendarIcon,
 } from 'lucide-react';
 import { formatCurrency } from '@/lib/currency';
 import { formatUgandaDateTime } from '@/lib/utils';
@@ -111,6 +116,7 @@ const Exchanges = () => {
   // Reason and payment
   const [reason, setReason] = useState('');
   const [paymentMethod, setPaymentMethod] = useState('cash');
+  const [cashDate, setCashDate] = useState<Date>(new Date());
   const [processing, setProcessing] = useState(false);
   
   // View exchange details
@@ -314,14 +320,14 @@ const Exchanges = () => {
 
       if (exchangeError) throw exchangeError;
 
-      // Update cash register for TODAY's date (top-ups add to sales, refunds add to refunds)
-      const today = new Date().toISOString().split('T')[0];
+      // Update cash register for the SELECTED date (top-ups add to sales, refunds add to refunds)
+      const selectedDate = format(cashDate, 'yyyy-MM-dd');
       
-      // Check if cash register exists for today
+      // Check if cash register exists for selected date
       const { data: existingRegister } = await supabase
         .from('cash_register')
         .select('*')
-        .eq('date', today)
+        .eq('date', selectedDate)
         .maybeSingle();
 
       if (existingRegister) {
@@ -347,12 +353,12 @@ const Exchanges = () => {
             .eq('id', existingRegister.id);
         }
       } else {
-        // Create new register for today if it doesn't exist
+        // Create new register for selected date if it doesn't exist
         if (difference > 0) {
           await supabase
             .from('cash_register')
             .insert({
-              date: today,
+              date: selectedDate,
               opening_balance: 0,
               total_sales: difference,
               total_refunds: 0,
@@ -365,7 +371,7 @@ const Exchanges = () => {
           await supabase
             .from('cash_register')
             .insert({
-              date: today,
+              date: selectedDate,
               opening_balance: 0,
               total_sales: 0,
               total_refunds: refundAmount,
@@ -435,8 +441,8 @@ const Exchanges = () => {
       toast({ 
         title: 'Success', 
         description: exchangeType === 'exchange' 
-          ? `Exchange processed. ${difference > 0 ? `Customer paid ${formatCurrency(difference)} top-up (added to today's cash)` : difference < 0 ? `Refunded ${formatCurrency(Math.abs(difference))} to customer` : 'Even exchange'}`
-          : `Refund of ${formatCurrency(returnedValue)} processed`
+          ? `Exchange processed. ${difference > 0 ? `Customer paid ${formatCurrency(difference)} top-up (added to ${format(cashDate, 'MMM d, yyyy')} cash)` : difference < 0 ? `Refunded ${formatCurrency(Math.abs(difference))} to customer` : 'Even exchange'}`
+          : `Refund of ${formatCurrency(returnedValue)} processed (recorded on ${format(cashDate, 'MMM d, yyyy')})`
       });
       
       resetDialog();
@@ -461,6 +467,7 @@ const Exchanges = () => {
     setExchangeType('exchange');
     setReason('');
     setPaymentMethod('cash');
+    setCashDate(new Date());
     setProductSearch('');
   };
 
@@ -850,18 +857,81 @@ const Exchanges = () => {
               </div>
 
               {getDifference() !== 0 && (
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label>Payment Method</Label>
+                    <Select value={paymentMethod} onValueChange={setPaymentMethod}>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="cash">Cash</SelectItem>
+                        <SelectItem value="mobile_money">Mobile Money</SelectItem>
+                        <SelectItem value="card">Card</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Record to Cash Date</Label>
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <Button
+                          variant="outline"
+                          className={cn(
+                            "w-full justify-start text-left font-normal",
+                            !cashDate && "text-muted-foreground"
+                          )}
+                        >
+                          <CalendarIcon className="mr-2 h-4 w-4" />
+                          {cashDate ? format(cashDate, "PPP") : <span>Pick a date</span>}
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-auto p-0" align="start">
+                        <Calendar
+                          mode="single"
+                          selected={cashDate}
+                          onSelect={(date) => date && setCashDate(date)}
+                          initialFocus
+                          className="p-3 pointer-events-auto"
+                        />
+                      </PopoverContent>
+                    </Popover>
+                    <p className="text-xs text-muted-foreground">
+                      Top-up/refund will be recorded in this date's cash register
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {getDifference() === 0 && exchangeType === 'refund' && (
                 <div className="space-y-2">
-                  <Label>Payment Method</Label>
-                  <Select value={paymentMethod} onValueChange={setPaymentMethod}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="cash">Cash</SelectItem>
-                      <SelectItem value="mobile_money">Mobile Money</SelectItem>
-                      <SelectItem value="card">Card</SelectItem>
-                    </SelectContent>
-                  </Select>
+                  <Label>Record to Cash Date</Label>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="outline"
+                        className={cn(
+                          "w-full sm:w-[280px] justify-start text-left font-normal",
+                          !cashDate && "text-muted-foreground"
+                        )}
+                      >
+                        <CalendarIcon className="mr-2 h-4 w-4" />
+                        {cashDate ? format(cashDate, "PPP") : <span>Pick a date</span>}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0" align="start">
+                      <Calendar
+                        mode="single"
+                        selected={cashDate}
+                        onSelect={(date) => date && setCashDate(date)}
+                        initialFocus
+                        className="p-3 pointer-events-auto"
+                      />
+                    </PopoverContent>
+                  </Popover>
+                  <p className="text-xs text-muted-foreground">
+                    Refund will be recorded in this date's cash register
+                  </p>
                 </div>
               )}
 
