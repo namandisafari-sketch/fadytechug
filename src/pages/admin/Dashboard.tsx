@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Package, MessageSquare, Users, Banknote, CreditCard, CalendarIcon, Receipt, Wallet } from 'lucide-react';
+import { Package, MessageSquare, Users, Banknote, CreditCard, CalendarIcon, Receipt, Wallet, ArrowLeftRight, RefreshCw } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { formatCurrency } from '@/lib/currency';
 import { Badge } from '@/components/ui/badge';
@@ -23,6 +23,9 @@ interface Stats {
   todayExpenses: number;
   outstandingCredit: number;
   creditCustomers: number;
+  exchangeTopUps: number;
+  exchangeRefunds: number;
+  exchangeCount: number;
 }
 
 interface CreditCustomer {
@@ -45,7 +48,10 @@ const Dashboard = () => {
     todayTransactions: 0,
     todayExpenses: 0,
     outstandingCredit: 0,
-    creditCustomers: 0
+    creditCustomers: 0,
+    exchangeTopUps: 0,
+    exchangeRefunds: 0,
+    exchangeCount: 0
   });
   const [creditCustomers, setCreditCustomers] = useState<CreditCustomer[]>([]);
   const [loading, setLoading] = useState(true);
@@ -61,7 +67,7 @@ const Dashboard = () => {
       endOfDay.setHours(23, 59, 59, 999);
       const dateStr = format(selectedDate, 'yyyy-MM-dd');
       
-      const [productsRes, inquiriesRes, customersRes, salesRes, expensesRes] = await Promise.all([
+      const [productsRes, inquiriesRes, customersRes, salesRes, expensesRes, exchangesRes] = await Promise.all([
         supabase.from('products').select('id, is_active'),
         supabase.from('inquiries').select('id, status'),
         supabase.from('customers').select('id'),
@@ -70,7 +76,11 @@ const Dashboard = () => {
           .lte('created_at', endOfDay.toISOString()),
         supabase.from('expenses')
           .select('amount')
-          .eq('expense_date', dateStr)
+          .eq('expense_date', dateStr),
+        supabase.from('exchanges')
+          .select('id, amount_paid, refund_given, exchange_type, created_at')
+          .gte('created_at', startOfDay.toISOString())
+          .lte('created_at', endOfDay.toISOString())
       ]);
 
       // Get sale IDs for credit sales on the selected date
@@ -110,6 +120,11 @@ const Dashboard = () => {
       // Total expenses for the day
       const todayExpenses = expensesRes.data?.reduce((sum, e) => sum + e.amount, 0) || 0;
       
+      // Exchange top-ups and refunds for the day
+      const exchangeTopUps = exchangesRes.data?.reduce((sum, e) => sum + (e.amount_paid || 0), 0) || 0;
+      const exchangeRefunds = exchangesRes.data?.reduce((sum, e) => sum + (e.refund_given || 0), 0) || 0;
+      const exchangeCount = exchangesRes.data?.length || 0;
+      
       // Outstanding credit for the selected date (uncollected balances with balance > 0)
       const outstandingCreditData = creditSalesForDate.data?.filter((c: any) => c.balance > 0) || [];
       const outstandingCredit = outstandingCreditData.reduce((sum: number, c: any) => sum + c.balance, 0);
@@ -144,7 +159,10 @@ const Dashboard = () => {
         todayTransactions: salesRes.data?.length || 0,
         todayExpenses,
         outstandingCredit,
-        creditCustomers: Object.keys(customerBalances).length
+        creditCustomers: Object.keys(customerBalances).length,
+        exchangeTopUps,
+        exchangeRefunds,
+        exchangeCount
       });
     } catch (error) {
       console.error('Error fetching stats:', error);
@@ -157,10 +175,10 @@ const Dashboard = () => {
     fetchStats();
   }, [fetchStats]);
 
-  // Real-time subscription for credit updates
+  // Real-time subscription for credit and exchange updates
   useEffect(() => {
     const channel = supabase
-      .channel('dashboard-credit-updates')
+      .channel('dashboard-updates')
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'credit_sales' },
@@ -174,6 +192,14 @@ const Dashboard = () => {
         { event: '*', schema: 'public', table: 'credit_payments' },
         () => {
           console.log('Credit payment made, refreshing dashboard...');
+          fetchStats();
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'exchanges' },
+        () => {
+          console.log('Exchange processed, refreshing dashboard...');
           fetchStats();
         }
       )
@@ -227,6 +253,26 @@ const Dashboard = () => {
       color: 'text-orange-600',
       bgColor: 'bg-orange-500/10',
       borderColor: 'border-orange-500/30'
+    },
+    {
+      title: `${dateLabel} Exchange Top-ups`,
+      description: 'Extra payments collected from product exchanges',
+      value: formatCurrency(stats.exchangeTopUps),
+      subtitle: `${stats.exchangeCount} exchanges processed`,
+      icon: ArrowLeftRight,
+      color: 'text-cyan-600',
+      bgColor: 'bg-cyan-500/10',
+      borderColor: 'border-cyan-500/30'
+    },
+    {
+      title: `${dateLabel} Exchange Refunds`,
+      description: 'Refunds given for exchanges/returns',
+      value: formatCurrency(stats.exchangeRefunds),
+      subtitle: 'Given back to customers',
+      icon: RefreshCw,
+      color: 'text-pink-600',
+      bgColor: 'bg-pink-500/10',
+      borderColor: 'border-pink-500/30'
     }
   ];
 
@@ -288,7 +334,7 @@ const Dashboard = () => {
       </div>
 
       {/* Financial Overview Cards */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
         {financialCards.map((card) => (
           <Card key={card.title} className={cn("border", card.borderColor, card.bgColor)}>
             <CardHeader className="flex flex-row items-center justify-between pb-2">
