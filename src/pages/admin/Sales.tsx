@@ -94,6 +94,8 @@ const Sales = () => {
 
   // Depositable cash (matches POS end-of-day calculation)
   const [cashDrawerBalance, setCashDrawerBalance] = useState(0);
+  const [openingBalance, setOpeningBalance] = useState(0);
+  const [dayNetActivity, setDayNetActivity] = useState(0);
 
   const [creditPaymentsTotal, setCreditPaymentsTotal] = useState(0);
   const [creditPaymentsCount, setCreditPaymentsCount] = useState(0);
@@ -375,10 +377,10 @@ const Sales = () => {
       .eq('date', prevDay)
       .maybeSingle();
 
-    const openingBalance = prevRegister?.closing_balance || 0;
+    const opening = prevRegister?.closing_balance || 0;
 
-    const balance =
-      openingBalance +
+    // Day's net activity (excluding opening balance)
+    const netActivity =
       totalCashSales +
       totalCashCreditPayments +
       totalExchangeTopUps -
@@ -388,6 +390,10 @@ const Sales = () => {
       totalCashSupplierPayments -
       totalDepositsForDay;
 
+    const balance = opening + netActivity;
+
+    setOpeningBalance(opening);
+    setDayNetActivity(netActivity);
     setCashDrawerBalance(balance);
   };
 
@@ -811,15 +817,43 @@ const Sales = () => {
           </CardContent>
         </Card>
 
+        <Card className="border-slate-500/30 bg-slate-500/10">
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">Opening Balance</CardTitle>
+            <Wallet className="h-5 w-5 text-slate-600" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-slate-600">{formatCurrency(openingBalance)}</div>
+            <p className="text-xs text-muted-foreground mt-1">Carried from previous day</p>
+          </CardContent>
+        </Card>
+
+        <Card className={`border-indigo-500/30 bg-indigo-500/10`}>
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">
+              {dateFilter ? "Selected Day's Net Activity" : "Today's Net Activity"}
+            </CardTitle>
+            <TrendingUp className="h-5 w-5 text-indigo-600" />
+          </CardHeader>
+          <CardContent>
+            <div className={`text-2xl font-bold ${dayNetActivity >= 0 ? 'text-indigo-600' : 'text-red-600'}`}>
+              {formatCurrency(dayNetActivity)}
+            </div>
+            <p className="text-xs text-muted-foreground mt-1">
+              Sales + credit payments + top-ups − refunds − expenses
+            </p>
+          </CardContent>
+        </Card>
+
         <Card className="border-purple-500/30 bg-purple-500/10">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Net Cash (Depositable)</CardTitle>
-            <TrendingUp className="h-5 w-5 text-purple-600" />
+            <CardTitle className="text-sm font-medium text-muted-foreground">Total Depositable</CardTitle>
+            <DollarSign className="h-5 w-5 text-purple-600" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-purple-600">{formatCurrency(dayNetCashTotal)}</div>
             <p className="text-xs text-muted-foreground mt-1">
-              Cash available to deposit (incl. top-ups & credit payments; excl. refunds, exchange refunds, expenses)
+              Opening + day's net activity
             </p>
           </CardContent>
         </Card>
