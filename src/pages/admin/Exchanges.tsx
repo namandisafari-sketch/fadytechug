@@ -298,7 +298,8 @@ const Exchanges = () => {
           }))
         : [];
 
-      // Create exchange record
+      // Create exchange record with the selected cash_date
+      const selectedDate = format(cashDate, 'yyyy-MM-dd');
       const { error: exchangeError } = await supabase
         .from('exchanges')
         .insert({
@@ -315,13 +316,13 @@ const Exchanges = () => {
           amount_paid: difference > 0 ? difference : 0,
           refund_given: difference < 0 ? Math.abs(difference) : 0,
           reason,
-          processed_by: user?.id
+          processed_by: user?.id,
+          cash_date: selectedDate
         });
 
       if (exchangeError) throw exchangeError;
 
       // Update cash register for the SELECTED date (top-ups add to sales, refunds add to refunds)
-      const selectedDate = format(cashDate, 'yyyy-MM-dd');
       
       // Check if cash register exists for selected date
       const { data: existingRegister } = await supabase
