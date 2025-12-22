@@ -27,6 +27,9 @@ import {
   Archive,
   CreditCard,
   HandCoins,
+  ArrowLeftRight,
+  RefreshCw,
+  Wallet,
 } from 'lucide-react';
 import { formatCurrency } from '@/lib/currency';
 import BarcodeScanner from '@/components/BarcodeScanner';
@@ -91,6 +94,9 @@ const Sales = () => {
   const [creditPaymentsTotal, setCreditPaymentsTotal] = useState(0);
   const [creditPaymentsCount, setCreditPaymentsCount] = useState(0);
   const [expensesTotal, setExpensesTotal] = useState(0);
+  const [exchangeTopUps, setExchangeTopUps] = useState(0);
+  const [exchangeRefunds, setExchangeRefunds] = useState(0);
+  const [exchangeCount, setExchangeCount] = useState(0);
 
   const KAMPALA_OFFSET_MS = 3 * 60 * 60 * 1000;
 
@@ -125,6 +131,7 @@ const Sales = () => {
     fetchExpensesTotal();
     checkAdminStatus();
     fetchCreditPayments();
+    fetchExchanges();
   }, [dateFilter]);
 
   // Real-time subscriptions for live updates
@@ -165,6 +172,13 @@ const Sales = () => {
         { event: '*', schema: 'public', table: 'credit_sales' },
         () => {
           fetchSales();
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'exchanges' },
+        () => {
+          fetchExchanges();
         }
       )
       .subscribe();
@@ -276,6 +290,20 @@ const Sales = () => {
     const total = data?.reduce((sum, p) => sum + p.amount, 0) || 0;
     setCreditPaymentsTotal(total);
     setCreditPaymentsCount(data?.length || 0);
+  };
+
+  const fetchExchanges = async () => {
+    const day = dateFilter || getKampalaDateString(new Date());
+    const { data } = await supabase
+      .from('exchanges')
+      .select('id, amount_paid, refund_given')
+      .eq('cash_date', day);
+
+    const topUps = data?.reduce((sum, e) => sum + (e.amount_paid || 0), 0) || 0;
+    const refunds = data?.reduce((sum, e) => sum + (e.refund_given || 0), 0) || 0;
+    setExchangeTopUps(topUps);
+    setExchangeRefunds(refunds);
+    setExchangeCount(data?.length || 0);
   };
 
   const viewSaleDetails = async (sale: Sale) => {
@@ -718,6 +746,45 @@ const Sales = () => {
           <CardContent>
             <div className="text-2xl font-bold text-emerald-600">{formatCurrency(creditPaymentsTotal)}</div>
             <p className="text-xs text-muted-foreground mt-1">{creditPaymentsCount} payments collected</p>
+          </CardContent>
+        </Card>
+
+        <Card className="border-orange-500/30 bg-orange-500/10">
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">
+              {dateFilter ? 'Selected Day Expenses' : "Today's Expenses"}
+            </CardTitle>
+            <Wallet className="h-5 w-5 text-orange-600" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-orange-600">{formatCurrency(expensesTotal)}</div>
+            <p className="text-xs text-muted-foreground mt-1">Deducted from operations</p>
+          </CardContent>
+        </Card>
+
+        <Card className="border-cyan-500/30 bg-cyan-500/10">
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">
+              {dateFilter ? 'Selected Day Exchange Top-ups' : "Today's Exchange Top-ups"}
+            </CardTitle>
+            <ArrowLeftRight className="h-5 w-5 text-cyan-600" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-cyan-600">{formatCurrency(exchangeTopUps)}</div>
+            <p className="text-xs text-muted-foreground mt-1">{exchangeCount} exchanges processed</p>
+          </CardContent>
+        </Card>
+
+        <Card className="border-pink-500/30 bg-pink-500/10">
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">
+              {dateFilter ? 'Selected Day Exchange Refunds' : "Today's Exchange Refunds"}
+            </CardTitle>
+            <RefreshCw className="h-5 w-5 text-pink-600" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-pink-600">{formatCurrency(exchangeRefunds)}</div>
+            <p className="text-xs text-muted-foreground mt-1">Given back to customers</p>
           </CardContent>
         </Card>
       </div>
