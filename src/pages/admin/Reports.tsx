@@ -5,30 +5,35 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { supabase } from '@/integrations/supabase/client';
-import { FileText, TrendingUp, TrendingDown, DollarSign, Calendar, Download } from 'lucide-react';
+import { FileText, TrendingUp, TrendingDown, DollarSign, Calendar, Download, Package } from 'lucide-react';
 import { formatCurrency } from '@/lib/currency';
 import { format, startOfMonth, endOfMonth, subMonths } from 'date-fns';
 
 interface FinancialData {
-  sales: number;
+  revenue: number;
   refunds: number;
+  exchangeRefunds: number;
+  netRevenue: number;
+  cogs: number;
+  grossProfit: number;
   expenses: number;
-  purchases: number;
-  netIncome: number;
+  netProfit: number;
 }
 
 interface MonthlyData {
   month: string;
-  sales: number;
+  revenue: number;
+  cogs: number;
+  grossProfit: number;
   expenses: number;
-  profit: number;
+  netProfit: number;
 }
 
 const Reports = () => {
   const [period, setPeriod] = useState('current');
   const [loading, setLoading] = useState(true);
   const [financialData, setFinancialData] = useState<FinancialData>({
-    sales: 0, refunds: 0, expenses: 0, purchases: 0, netIncome: 0
+    revenue: 0, refunds: 0, exchangeRefunds: 0, netRevenue: 0, cogs: 0, grossProfit: 0, expenses: 0, netProfit: 0
   });
   const [monthlyData, setMonthlyData] = useState<MonthlyData[]>([]);
   const [expensesByCategory, setExpensesByCategory] = useState<Record<string, number>>({});
@@ -75,28 +80,80 @@ const Reports = () => {
     const endStr = format(endDate, 'yyyy-MM-dd');
 
     try {
-      // Fetch sales - exclude deleted and credit sales (credit sales don't count until payment)
+      // Fetch sales with sale_items for COGS calculation - exclude deleted and credit sales
       const { data: salesData } = await supabase
         .from('sales')
-        .select('total, created_at, payment_method')
+        .select('id, total, created_at, payment_method')
         .is('deleted_at', null)
         .neq('payment_method', 'credit')
         .gte('created_at', startStr)
         .lte('created_at', endStr + 'T23:59:59');
 
       const cashCardSales = salesData?.reduce((sum, s) => sum + Number(s.total), 0) || 0;
+      const saleIds = salesData?.map(s => s.id) || [];
+
+      // Fetch sale items with product unit_cost for COGS
+      let cogs = 0;
+      if (saleIds.length > 0) {
+        const { data: saleItemsData } = await supabase
+          .from('sale_items')
+          .select('quantity, product_id, products(unit_cost)')
+          .in('sale_id', saleIds);
+
+        cogs = saleItemsData?.reduce((sum, item: any) => {
+          const unitCost = Number(item.products?.unit_cost) || 0;
+          return sum + (unitCost * item.quantity);
+        }, 0) || 0;
+      }
 
       // Fetch credit payments - these count as revenue when payment is made
       const { data: creditPaymentsData } = await supabase
         .from('credit_payments')
-        .select('amount, payment_date')
+        .select('amount, payment_date, credit_sale_id')
         .gte('payment_date', startStr)
         .lte('payment_date', endStr + 'T23:59:59');
 
       const creditPaymentsRevenue = creditPaymentsData?.reduce((sum, p) => sum + Number(p.amount), 0) || 0;
 
+      // For credit payments, also calculate COGS (proportional to payment amount)
+      if (creditPaymentsData && creditPaymentsData.length > 0) {
+        const creditSaleIds = [...new Set(creditPaymentsData.map(p => p.credit_sale_id))];
+        const { data: creditSalesInfo } = await supabase
+          .from('credit_sales')
+          .select('id, sale_id, total_amount')
+          .in('id', creditSaleIds);
+
+        if (creditSalesInfo && creditSalesInfo.length > 0) {
+          const creditSaleIdToSaleId = new Map(creditSalesInfo.map(cs => [cs.id, { saleId: cs.sale_id, total: cs.total_amount }]));
+          const originalSaleIds = creditSalesInfo.map(cs => cs.sale_id);
+
+          const { data: creditSaleItems } = await supabase
+            .from('sale_items')
+            .select('sale_id, quantity, products(unit_cost)')
+            .in('sale_id', originalSaleIds);
+
+          // Calculate total COGS per original sale
+          const saleCogs = new Map<string, number>();
+          creditSaleItems?.forEach((item: any) => {
+            const unitCost = Number(item.products?.unit_cost) || 0;
+            const itemCogs = unitCost * item.quantity;
+            saleCogs.set(item.sale_id, (saleCogs.get(item.sale_id) || 0) + itemCogs);
+          });
+
+          // Allocate COGS proportionally based on payment amount / total sale amount
+          creditPaymentsData.forEach(payment => {
+            const creditSaleInfo = creditSaleIdToSaleId.get(payment.credit_sale_id);
+            if (creditSaleInfo) {
+              const totalSaleCogs = saleCogs.get(creditSaleInfo.saleId) || 0;
+              const paymentRatio = creditSaleInfo.total > 0 ? Number(payment.amount) / creditSaleInfo.total : 0;
+              cogs += totalSaleCogs * paymentRatio;
+            }
+          });
+        }
+      }
+
       // Total revenue = cash/card sales + credit payments received
-      const totalSales = cashCardSales + creditPaymentsRevenue;
+      const totalRevenue = cashCardSales + creditPaymentsRevenue;
 
       // Fetch refunds - exclude deleted
       const { data: refundsData } = await supabase
@@ -107,6 +164,15 @@ const Reports = () => {
         .lte('created_at', endStr + 'T23:59:59');
 
       const totalRefunds = refundsData?.reduce((sum, r) => sum + Number(r.amount), 0) || 0;
+
+      // Fetch exchange refunds
+      const { data: exchangesData } = await supabase
+        .from('exchanges')
+        .select('refund_given, cash_date')
+        .gte('cash_date', startStr)
+        .lte('cash_date', endStr);
+
+      const exchangeRefunds = exchangesData?.reduce((sum, e) => sum + Number(e.refund_given || 0), 0) || 0;
 
       // Fetch expenses
       const { data: expensesData } = await supabase
@@ -124,25 +190,20 @@ const Reports = () => {
       });
       setExpensesByCategory(expCat);
 
-      // Fetch purchase orders (received)
-      const { data: purchasesData } = await supabase
-        .from('purchase_orders')
-        .select('total_amount, created_at')
-        .eq('status', 'received')
-        .gte('created_at', startStr)
-        .lte('created_at', endStr + 'T23:59:59');
-
-      const totalPurchases = purchasesData?.reduce((sum, p) => sum + Number(p.total_amount), 0) || 0;
-
-      // Calculate net income
-      const netIncome = totalSales - totalRefunds - totalExpenses;
+      // Calculate financial metrics
+      const netRevenue = totalRevenue - totalRefunds - exchangeRefunds;
+      const grossProfit = netRevenue - cogs;
+      const netProfit = grossProfit - totalExpenses;
 
       setFinancialData({
-        sales: totalSales,
+        revenue: totalRevenue,
         refunds: totalRefunds,
+        exchangeRefunds,
+        netRevenue,
+        cogs,
+        grossProfit,
         expenses: totalExpenses,
-        purchases: totalPurchases,
-        netIncome
+        netProfit
       });
 
       // Calculate assets
@@ -152,11 +213,11 @@ const Reports = () => {
         .select('amount');
       const cashInBank = depositsData?.reduce((sum, d) => sum + Number(d.amount), 0) || 0;
 
-      // Inventory value (simplified: sum of price * quantity for all products)
+      // Inventory value using unit_cost (COGS-based valuation)
       const { data: inventoryData } = await supabase
         .from('products')
-        .select('price, stock_quantity');
-      const inventoryValue = inventoryData?.reduce((sum, p) => sum + (Number(p.price) * Number(p.stock_quantity)), 0) || 0;
+        .select('unit_cost, stock_quantity');
+      const inventoryValue = inventoryData?.reduce((sum, p) => sum + (Number(p.unit_cost || 0) * Number(p.stock_quantity)), 0) || 0;
 
       // Accounts receivable - outstanding credit balances
       const { data: creditSalesData } = await supabase
@@ -180,7 +241,7 @@ const Reports = () => {
 
       setLiabilities({ payables });
 
-      // Monthly trend data
+      // Monthly trend data with COGS calculation
       const months: MonthlyData[] = [];
       for (let i = 5; i >= 0; i--) {
         const monthStart = startOfMonth(subMonths(new Date(), i));
@@ -188,13 +249,31 @@ const Reports = () => {
         const monthStartStr = format(monthStart, 'yyyy-MM-dd');
         const monthEndStr = format(monthEnd, 'yyyy-MM-dd');
 
+        // Get sales for the month
         const { data: mSales } = await supabase
           .from('sales')
-          .select('total')
+          .select('id, total')
           .is('deleted_at', null)
           .neq('payment_method', 'credit')
           .gte('created_at', monthStartStr)
           .lte('created_at', monthEndStr + 'T23:59:59');
+
+        const cashCardSales = mSales?.reduce((sum, s) => sum + Number(s.total), 0) || 0;
+        const monthSaleIds = mSales?.map(s => s.id) || [];
+
+        // Calculate COGS for the month
+        let monthCogs = 0;
+        if (monthSaleIds.length > 0) {
+          const { data: monthSaleItems } = await supabase
+            .from('sale_items')
+            .select('quantity, products(unit_cost)')
+            .in('sale_id', monthSaleIds);
+
+          monthCogs = monthSaleItems?.reduce((sum, item: any) => {
+            const unitCost = Number(item.products?.unit_cost) || 0;
+            return sum + (unitCost * item.quantity);
+          }, 0) || 0;
+        }
 
         const { data: mCreditPayments } = await supabase
           .from('credit_payments')
@@ -208,16 +287,19 @@ const Reports = () => {
           .gte('expense_date', monthStartStr)
           .lte('expense_date', monthEndStr);
 
-        const cashCardSales = mSales?.reduce((sum, s) => sum + Number(s.total), 0) || 0;
         const creditPayments = mCreditPayments?.reduce((sum, p) => sum + Number(p.amount), 0) || 0;
-        const sales = cashCardSales + creditPayments;
+        const revenue = cashCardSales + creditPayments;
         const expenses = mExpenses?.reduce((sum, e) => sum + Number(e.amount), 0) || 0;
+        const grossProfit = revenue - monthCogs;
+        const netProfit = grossProfit - expenses;
 
         months.push({
           month: format(monthStart, 'MMM yyyy'),
-          sales,
+          revenue,
+          cogs: monthCogs,
+          grossProfit,
           expenses,
-          profit: sales - expenses
+          netProfit
         });
       }
       setMonthlyData(months);
@@ -263,7 +345,7 @@ const Reports = () => {
 
         {/* Income Statement */}
         <TabsContent value="income" className="space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             <Card className="overflow-hidden">
               <CardContent className="pt-6">
                 <div className="flex items-center gap-3">
@@ -272,7 +354,7 @@ const Reports = () => {
                   </div>
                   <div className="min-w-0 flex-1">
                     <p className="text-sm text-muted-foreground">Revenue</p>
-                    <p className="text-xl font-bold text-green-600 truncate">{formatCurrency(financialData.sales)}</p>
+                    <p className="text-xl font-bold text-green-600 truncate">{formatCurrency(financialData.revenue)}</p>
                   </div>
                 </div>
               </CardContent>
@@ -280,12 +362,12 @@ const Reports = () => {
             <Card className="overflow-hidden">
               <CardContent className="pt-6">
                 <div className="flex items-center gap-3">
-                  <div className="p-2 bg-red-100 rounded-lg flex-shrink-0">
-                    <TrendingDown className="h-5 w-5 text-red-600" />
+                  <div className="p-2 bg-blue-100 rounded-lg flex-shrink-0">
+                    <Package className="h-5 w-5 text-blue-600" />
                   </div>
                   <div className="min-w-0 flex-1">
-                    <p className="text-sm text-muted-foreground">Refunds</p>
-                    <p className="text-xl font-bold text-red-600 truncate">-{formatCurrency(financialData.refunds)}</p>
+                    <p className="text-sm text-muted-foreground">Cost of Goods Sold</p>
+                    <p className="text-xl font-bold text-blue-600 truncate">-{formatCurrency(financialData.cogs)}</p>
                   </div>
                 </div>
               </CardContent>
@@ -293,26 +375,28 @@ const Reports = () => {
             <Card className="overflow-hidden">
               <CardContent className="pt-6">
                 <div className="flex items-center gap-3">
-                  <div className="p-2 bg-orange-100 rounded-lg flex-shrink-0">
-                    <DollarSign className="h-5 w-5 text-orange-600" />
+                  <div className={`p-2 rounded-lg flex-shrink-0 ${financialData.grossProfit >= 0 ? 'bg-emerald-100' : 'bg-red-100'}`}>
+                    <TrendingUp className={`h-5 w-5 ${financialData.grossProfit >= 0 ? 'text-emerald-600' : 'text-red-600'}`} />
                   </div>
                   <div className="min-w-0 flex-1">
-                    <p className="text-sm text-muted-foreground">Expenses</p>
-                    <p className="text-xl font-bold text-orange-600 truncate">-{formatCurrency(financialData.expenses)}</p>
+                    <p className="text-sm text-muted-foreground">Gross Profit</p>
+                    <p className={`text-xl font-bold truncate ${financialData.grossProfit >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                      {formatCurrency(financialData.grossProfit)}
+                    </p>
                   </div>
                 </div>
               </CardContent>
             </Card>
-            <Card className={`overflow-hidden ${financialData.netIncome >= 0 ? 'border-green-500' : 'border-red-500'}`}>
+            <Card className={`overflow-hidden ${financialData.netProfit >= 0 ? 'border-green-500' : 'border-red-500'}`}>
               <CardContent className="pt-6">
                 <div className="flex items-center gap-3">
-                  <div className={`p-2 rounded-lg flex-shrink-0 ${financialData.netIncome >= 0 ? 'bg-green-100' : 'bg-red-100'}`}>
-                    <FileText className={`h-5 w-5 ${financialData.netIncome >= 0 ? 'text-green-600' : 'text-red-600'}`} />
+                  <div className={`p-2 rounded-lg flex-shrink-0 ${financialData.netProfit >= 0 ? 'bg-green-100' : 'bg-red-100'}`}>
+                    <FileText className={`h-5 w-5 ${financialData.netProfit >= 0 ? 'text-green-600' : 'text-red-600'}`} />
                   </div>
                   <div className="min-w-0 flex-1">
-                    <p className="text-sm text-muted-foreground">Net Income</p>
-                    <p className={`text-xl font-bold truncate ${financialData.netIncome >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                      {formatCurrency(financialData.netIncome)}
+                    <p className="text-sm text-muted-foreground">Net Profit</p>
+                    <p className={`text-xl font-bold truncate ${financialData.netProfit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                      {formatCurrency(financialData.netProfit)}
                     </p>
                   </div>
                 </div>
@@ -330,19 +414,36 @@ const Reports = () => {
                 <TableBody>
                   <TableRow className="font-medium bg-muted/50">
                     <TableCell colSpan={2}>Revenue</TableCell>
-                    <TableCell></TableCell>
                   </TableRow>
                   <TableRow>
                     <TableCell className="pl-8">Sales Revenue</TableCell>
-                    <TableCell className="text-right">{formatCurrency(financialData.sales)}</TableCell>
+                    <TableCell className="text-right">{formatCurrency(financialData.revenue)}</TableCell>
                   </TableRow>
                   <TableRow>
                     <TableCell className="pl-8">Less: Sales Returns & Refunds</TableCell>
                     <TableCell className="text-right text-red-600">({formatCurrency(financialData.refunds)})</TableCell>
                   </TableRow>
+                  <TableRow>
+                    <TableCell className="pl-8">Less: Exchange Refunds</TableCell>
+                    <TableCell className="text-right text-red-600">({formatCurrency(financialData.exchangeRefunds)})</TableCell>
+                  </TableRow>
                   <TableRow className="font-medium border-t">
                     <TableCell>Net Revenue</TableCell>
-                    <TableCell className="text-right">{formatCurrency(financialData.sales - financialData.refunds)}</TableCell>
+                    <TableCell className="text-right">{formatCurrency(financialData.netRevenue)}</TableCell>
+                  </TableRow>
+
+                  <TableRow className="font-medium bg-muted/50 mt-4">
+                    <TableCell colSpan={2}>Cost of Goods Sold</TableCell>
+                  </TableRow>
+                  <TableRow>
+                    <TableCell className="pl-8">Product Costs (COGS)</TableCell>
+                    <TableCell className="text-right text-red-600">({formatCurrency(financialData.cogs)})</TableCell>
+                  </TableRow>
+                  <TableRow className="font-bold border-t bg-emerald-50">
+                    <TableCell>Gross Profit</TableCell>
+                    <TableCell className={`text-right ${financialData.grossProfit >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                      {formatCurrency(financialData.grossProfit)}
+                    </TableCell>
                   </TableRow>
 
                   <TableRow className="font-medium bg-muted/50 mt-4">
@@ -360,9 +461,9 @@ const Reports = () => {
                   </TableRow>
 
                   <TableRow className="font-bold text-lg border-t-2 bg-muted">
-                    <TableCell>Net Income</TableCell>
-                    <TableCell className={`text-right ${financialData.netIncome >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                      {formatCurrency(financialData.netIncome)}
+                    <TableCell>Net Profit</TableCell>
+                    <TableCell className={`text-right ${financialData.netProfit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                      {formatCurrency(financialData.netProfit)}
                     </TableCell>
                   </TableRow>
                 </TableBody>
@@ -457,9 +558,11 @@ const Reports = () => {
                 <TableHeader>
                   <TableRow>
                     <TableHead>Month</TableHead>
-                    <TableHead className="text-right">Sales</TableHead>
+                    <TableHead className="text-right">Revenue</TableHead>
+                    <TableHead className="text-right">COGS</TableHead>
+                    <TableHead className="text-right">Gross Profit</TableHead>
                     <TableHead className="text-right">Expenses</TableHead>
-                    <TableHead className="text-right">Profit/Loss</TableHead>
+                    <TableHead className="text-right">Net Profit</TableHead>
                     <TableHead className="text-right">Margin</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -467,21 +570,27 @@ const Reports = () => {
                   {monthlyData.map((data, idx) => (
                     <TableRow key={idx}>
                       <TableCell className="font-medium">{data.month}</TableCell>
-                      <TableCell className="text-right">{formatCurrency(data.sales)}</TableCell>
+                      <TableCell className="text-right">{formatCurrency(data.revenue)}</TableCell>
+                      <TableCell className="text-right text-blue-600">({formatCurrency(data.cogs)})</TableCell>
+                      <TableCell className={`text-right ${data.grossProfit >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                        {formatCurrency(data.grossProfit)}
+                      </TableCell>
                       <TableCell className="text-right text-red-600">({formatCurrency(data.expenses)})</TableCell>
-                      <TableCell className={`text-right font-medium ${data.profit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                        {formatCurrency(data.profit)}
+                      <TableCell className={`text-right font-medium ${data.netProfit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                        {formatCurrency(data.netProfit)}
                       </TableCell>
                       <TableCell className="text-right">
-                        {data.sales > 0 ? ((data.profit / data.sales) * 100).toFixed(1) : 0}%
+                        {data.revenue > 0 ? ((data.netProfit / data.revenue) * 100).toFixed(1) : 0}%
                       </TableCell>
                     </TableRow>
                   ))}
                   <TableRow className="font-bold border-t-2 bg-muted">
                     <TableCell>Total</TableCell>
-                    <TableCell className="text-right">{formatCurrency(monthlyData.reduce((s, d) => s + d.sales, 0))}</TableCell>
+                    <TableCell className="text-right">{formatCurrency(monthlyData.reduce((s, d) => s + d.revenue, 0))}</TableCell>
+                    <TableCell className="text-right text-blue-600">({formatCurrency(monthlyData.reduce((s, d) => s + d.cogs, 0))})</TableCell>
+                    <TableCell className="text-right">{formatCurrency(monthlyData.reduce((s, d) => s + d.grossProfit, 0))}</TableCell>
                     <TableCell className="text-right text-red-600">({formatCurrency(monthlyData.reduce((s, d) => s + d.expenses, 0))})</TableCell>
-                    <TableCell className="text-right">{formatCurrency(monthlyData.reduce((s, d) => s + d.profit, 0))}</TableCell>
+                    <TableCell className="text-right">{formatCurrency(monthlyData.reduce((s, d) => s + d.netProfit, 0))}</TableCell>
                     <TableCell></TableCell>
                   </TableRow>
                 </TableBody>
