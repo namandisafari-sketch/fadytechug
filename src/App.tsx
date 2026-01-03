@@ -31,6 +31,7 @@ import StockReceiving from "./pages/admin/StockReceiving";
 import DataBackup from "./pages/admin/DataBackup";
 import StaffManagement from "./pages/admin/StaffManagement";
 import SiteAppearance from "./pages/admin/SiteAppearance";
+import CustomerWallets from "./pages/admin/CustomerWallets";
 import PrintableGuide from "./pages/PrintableGuide";
 
 const queryClient = new QueryClient();
@@ -71,6 +72,7 @@ function AppContent() {
             <Route path="stock-receiving" element={<StockReceiving />} />
             <Route path="backup" element={<DataBackup />} />
             <Route path="customers" element={<Customers />} />
+            <Route path="wallets" element={<CustomerWallets />} />
             <Route path="inquiries" element={<Inquiries />} />
             <Route path="settings" element={<Settings />} />
             <Route path="site-appearance" element={<SiteAppearance />} />

@@ -46,6 +46,12 @@ interface BankSettings {
   autoDepositOnClose: boolean;
 }
 
+interface CustomerWallet {
+  id: string;
+  customer_id: string;
+  balance: number;
+}
+
 const PointOfSale = () => {
   const { user } = useAuth();
   const { toast } = useToast();
@@ -67,6 +73,10 @@ const PointOfSale = () => {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [selectedCustomerId, setSelectedCustomerId] = useState<string>('');
   
+  // Wallet payment state
+  const [customerWallets, setCustomerWallets] = useState<CustomerWallet[]>([]);
+  const [selectedWalletCustomerId, setSelectedWalletCustomerId] = useState<string>('');
+  
   // End day state
   const [endDayDialogOpen, setEndDayDialogOpen] = useState(false);
   const [closingShift, setClosingShift] = useState(false);
@@ -83,6 +93,7 @@ const PointOfSale = () => {
     fetchCustomers();
     fetchBankSettings();
     fetchCashRegisterBalance();
+    fetchCustomerWallets();
   }, []);
 
   const fetchCustomers = async () => {
@@ -103,6 +114,19 @@ const PointOfSale = () => {
     if (data?.value && typeof data.value === 'object') {
       setBankSettings(data.value as unknown as BankSettings);
     }
+  };
+
+  const fetchCustomerWallets = async () => {
+    const { data } = await supabase
+      .from('customer_wallets')
+      .select('id, customer_id, balance')
+      .gt('balance', 0);
+    if (data) setCustomerWallets(data);
+  };
+
+  const getWalletBalance = (customerId: string) => {
+    const wallet = customerWallets.find(w => w.customer_id === customerId);
+    return wallet?.balance || 0;
   };
 
   const fetchCashRegisterBalance = async (forDate?: Date) => {
@@ -323,6 +347,19 @@ const PointOfSale = () => {
       return;
     }
 
+    // For wallet payments, customer must be selected and have sufficient balance
+    if (paymentMethod === 'wallet') {
+      if (!selectedWalletCustomerId) {
+        toast({ title: 'Error', description: 'Please select a customer for wallet payment', variant: 'destructive' });
+        return;
+      }
+      const walletBalance = getWalletBalance(selectedWalletCustomerId);
+      if (walletBalance < total) {
+        toast({ title: 'Error', description: `Insufficient wallet balance. Available: ${formatCurrency(walletBalance)}`, variant: 'destructive' });
+        return;
+      }
+    }
+
     if (paymentMethod === 'cash' && change < 0) {
       toast({ title: 'Error', description: 'Insufficient payment', variant: 'destructive' });
       return;
@@ -335,24 +372,28 @@ const PointOfSale = () => {
       const { data: receiptData } = await supabase.rpc('generate_receipt_number');
       const receiptNumber = receiptData || `RCP-${Date.now()}`;
 
-      const selectedCustomer = customers.find(c => c.id === selectedCustomerId);
-      const actualAmountPaid = paymentMethod === 'credit' ? (parseFloat(amountPaid) || 0) : (parseFloat(amountPaid) || total);
+      const selectedCustomer = paymentMethod === 'wallet' 
+        ? customers.find(c => c.id === selectedWalletCustomerId)
+        : customers.find(c => c.id === selectedCustomerId);
+      const actualAmountPaid = paymentMethod === 'credit' ? (parseFloat(amountPaid) || 0) : total;
 
       // Create sale record with optional backdate
       const saleData: any = {
         receipt_number: receiptNumber,
-        customer_id: selectedCustomerId || null,
+        customer_id: paymentMethod === 'wallet' ? selectedWalletCustomerId : (selectedCustomerId || null),
         customer_name: selectedCustomer?.name || customerName || 'Walk In',
         subtotal,
         discount: discountAmount,
         total,
-        payment_method: paymentMethod as any,
+        payment_method: paymentMethod === 'wallet' ? 'cash' : paymentMethod as any, // Store as cash for reporting
         amount_paid: actualAmountPaid,
         change_given: paymentMethod === 'cash' ? Math.max(0, change) : 0,
         sold_by: user?.id,
-        notes: paymentMethod === 'credit' 
-          ? `Credit Sale - ${creditNotes}` 
-          : saleDate ? `Backdated sale from ${format(saleDate, 'PPP')}` : null
+        notes: paymentMethod === 'wallet' 
+          ? 'Paid from customer wallet'
+          : paymentMethod === 'credit' 
+            ? `Credit Sale - ${creditNotes}` 
+            : saleDate ? `Backdated sale from ${format(saleDate, 'PPP')}` : null
       };
 
       // If backdating, override created_at
@@ -421,6 +462,33 @@ const PointOfSale = () => {
         }
       }
 
+      // Handle wallet payment - deduct from customer wallet
+      if (paymentMethod === 'wallet' && selectedWalletCustomerId) {
+        const wallet = customerWallets.find(w => w.customer_id === selectedWalletCustomerId);
+        if (wallet) {
+          const newBalance = wallet.balance - total;
+          
+          // Update wallet balance
+          await supabase
+            .from('customer_wallets')
+            .update({ balance: newBalance })
+            .eq('id', wallet.id);
+
+          // Record transaction
+          await supabase
+            .from('wallet_transactions')
+            .insert({
+              customer_id: selectedWalletCustomerId,
+              transaction_type: 'purchase',
+              amount: -total,
+              balance_after: newBalance,
+              sale_id: sale.id,
+              notes: `Purchase - Receipt #${receiptNumber}`,
+              created_by: user?.id
+            });
+        }
+      }
+
       // Update stock and create inventory transactions
       for (const item of cart) {
         const newStock = item.product.stock_quantity - item.quantity;
@@ -443,7 +511,7 @@ const PointOfSale = () => {
           });
       }
 
-      setLastSale({ ...sale, items: cart, isCredit: paymentMethod === 'credit' });
+      setLastSale({ ...sale, items: cart, isCredit: paymentMethod === 'credit', isWallet: paymentMethod === 'wallet' });
       setShowReceipt(true);
       
       // Reset
@@ -452,11 +520,20 @@ const PointOfSale = () => {
       setCustomerName('');
       setDiscount('0');
       setSelectedCustomerId('');
+      setSelectedWalletCustomerId('');
       setCreditNotes('');
       setSaleDate(undefined);
       fetchProducts();
+      fetchCustomerWallets();
 
-      toast({ title: 'Success', description: paymentMethod === 'credit' ? 'Credit sale recorded successfully' : 'Sale completed successfully' });
+      toast({ 
+        title: 'Success', 
+        description: paymentMethod === 'wallet' 
+          ? 'Sale completed using customer wallet' 
+          : paymentMethod === 'credit' 
+            ? 'Credit sale recorded successfully' 
+            : 'Sale completed successfully' 
+      });
 
     } catch (error: any) {
       toast({ title: 'Error', description: error.message, variant: 'destructive' });
@@ -824,10 +901,51 @@ const PointOfSale = () => {
                       <SelectItem value="card">Card</SelectItem>
                       <SelectItem value="mobile_money">Mobile Money</SelectItem>
                       <SelectItem value="bank_transfer">Bank Transfer</SelectItem>
+                      <SelectItem value="wallet">Customer Wallet</SelectItem>
                       <SelectItem value="credit">Credit (Installments)</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
+
+                {paymentMethod === 'wallet' && (
+                  <div className="space-y-3 p-3 bg-green-500/10 border border-green-500/30 rounded-lg">
+                    <div>
+                      <Label className="text-green-600">Select Customer with Wallet *</Label>
+                      <Select value={selectedWalletCustomerId} onValueChange={setSelectedWalletCustomerId}>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select customer..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {customerWallets.map(wallet => {
+                            const customer = customers.find(c => c.id === wallet.customer_id);
+                            return (
+                              <SelectItem key={wallet.customer_id} value={wallet.customer_id}>
+                                {customer?.name || 'Unknown'} - Balance: {formatCurrency(wallet.balance)}
+                              </SelectItem>
+                            );
+                          })}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    {selectedWalletCustomerId && (
+                      <div className="p-3 bg-background rounded-lg">
+                        <p className="text-sm text-muted-foreground">Available Balance</p>
+                        <p className="text-xl font-bold text-green-600">{formatCurrency(getWalletBalance(selectedWalletCustomerId))}</p>
+                        {getWalletBalance(selectedWalletCustomerId) < total && (
+                          <p className="text-xs text-red-600 mt-1">Insufficient balance for this purchase</p>
+                        )}
+                        {getWalletBalance(selectedWalletCustomerId) >= total && (
+                          <p className="text-xs text-muted-foreground mt-1">
+                            After purchase: {formatCurrency(getWalletBalance(selectedWalletCustomerId) - total)}
+                          </p>
+                        )}
+                      </div>
+                    )}
+                    {customerWallets.length === 0 && (
+                      <p className="text-xs text-muted-foreground">No customers with wallet balance available.</p>
+                    )}
+                  </div>
+                )}
 
                 {paymentMethod === 'credit' && (
                   <div className="space-y-3 p-3 bg-orange-500/10 border border-orange-500/30 rounded-lg">
