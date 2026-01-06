@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { format } from 'date-fns';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -15,7 +15,7 @@ import { Calendar } from '@/components/ui/calendar';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
-import { Plus, Users, Edit, Trash2, Search, Mail, Phone, CreditCard, DollarSign, CalendarIcon, X } from 'lucide-react';
+import { Plus, Users, Edit, Trash2, Search, Mail, Phone, CreditCard, DollarSign, CalendarIcon, X, RefreshCw } from 'lucide-react';
 import { formatCurrency } from '@/lib/currency';
 import { cn, getUgandaDateString, formatUgandaDate, toUgandaDate } from '@/lib/utils';
 
@@ -82,28 +82,51 @@ const Customers = () => {
   const [startDate, setStartDate] = useState<Date | undefined>(undefined);
   const [endDate, setEndDate] = useState<Date | undefined>(undefined);
 
-  useEffect(() => {
-    fetchCustomers();
-    fetchCreditSales();
-  }, []);
-
-  const fetchCustomers = async () => {
+  const fetchCustomers = useCallback(async () => {
     const { data, error } = await supabase
       .from('customers')
       .select('*')
       .order('name');
 
     if (!error) setCustomers(data || []);
-  };
+  }, []);
 
-  const fetchCreditSales = async () => {
+  const fetchCreditSales = useCallback(async () => {
     const { data, error } = await supabase
       .from('credit_sales')
       .select('*, sales(receipt_number, created_at), customers(name, phone)')
       .order('created_at', { ascending: false });
 
     if (!error) setCreditSales(data || []);
-  };
+  }, []);
+
+  useEffect(() => {
+    fetchCustomers();
+    fetchCreditSales();
+
+    // Keep the list in sync if records are added/updated/deleted elsewhere
+    const channel = supabase
+      .channel('customers-credit-sales-sync')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'credit_sales' },
+        () => {
+          fetchCreditSales();
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'credit_payments' },
+        () => {
+          fetchCreditSales();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [fetchCustomers, fetchCreditSales]);
 
   const fetchPaymentHistory = async (creditSaleId: string) => {
     const { data } = await supabase
@@ -400,11 +423,25 @@ const Customers = () => {
                     <CreditCard className="h-5 w-5" />
                     Credit Sales
                   </div>
-                  {outstandingTotal > 0 && (
-                    <div className="text-orange-600">
-                      Total Outstanding: <span className="font-bold">{formatCurrency(outstandingTotal)}</span>
-                    </div>
-                  )}
+
+                  <div className="flex items-center gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={fetchCreditSales}
+                      disabled={loading}
+                    >
+                      <RefreshCw className="mr-2 h-4 w-4" />
+                      Refresh
+                    </Button>
+
+                    {outstandingTotal > 0 && (
+                      <div className="text-orange-600">
+                        Total Outstanding: <span className="font-bold">{formatCurrency(outstandingTotal)}</span>
+                      </div>
+                    )}
+                  </div>
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
                   <Popover>
