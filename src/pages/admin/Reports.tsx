@@ -93,34 +93,34 @@ const Reports = () => {
       const saleIds = salesData?.map(s => s.id) || [];
 
       // Fetch sale items with product unit_cost for COGS
+      // IMPORTANT: Avoid .in('sale_id', saleIds) because large ID lists can be truncated,
+      // and avoid the 1000-row default limit by paging.
       let cogs = 0;
-      if (saleIds.length > 0) {
-        // Fetch ALL sale items (may exceed 1000 row default limit)
+      {
         let allSaleItems: any[] = [];
         let offset = 0;
         const batchSize = 1000;
-        
+
         while (true) {
           const { data: batch } = await supabase
             .from('sale_items')
-            .select('quantity, product_id, products(unit_cost)')
-            .in('sale_id', saleIds)
+            .select('quantity, products(unit_cost), sales!inner(created_at, deleted_at, payment_method)')
+            .is('sales.deleted_at', null)
+            .neq('sales.payment_method', 'credit')
+            .gte('sales.created_at', startStr)
+            .lte('sales.created_at', endStr + 'T23:59:59')
             .range(offset, offset + batchSize - 1);
-          
+
           if (!batch || batch.length === 0) break;
           allSaleItems = allSaleItems.concat(batch);
           if (batch.length < batchSize) break;
           offset += batchSize;
         }
 
-        console.log('COGS Debug - Total sale items fetched:', allSaleItems.length);
-        
         cogs = allSaleItems.reduce((sum, item: any) => {
           const unitCost = Number(item.products?.unit_cost) || 0;
           return sum + (unitCost * item.quantity);
         }, 0);
-        
-        console.log('COGS Debug - Calculated COGS:', cogs);
       }
 
       // Fetch credit payments - these count as revenue when payment is made
@@ -291,20 +291,23 @@ const Reports = () => {
         const cashCardSales = mSales?.reduce((sum, s) => sum + Number(s.total), 0) || 0;
         const monthSaleIds = mSales?.map(s => s.id) || [];
 
-        // Calculate COGS for the month with pagination
+        // Calculate COGS for the month with pagination and sales join filtering
         let monthCogs = 0;
-        if (monthSaleIds.length > 0) {
+        {
           let allMonthSaleItems: any[] = [];
           let monthOffset = 0;
           const monthBatchSize = 1000;
-          
+
           while (true) {
             const { data: batch } = await supabase
               .from('sale_items')
-              .select('quantity, products(unit_cost)')
-              .in('sale_id', monthSaleIds)
+              .select('quantity, products(unit_cost), sales!inner(created_at, deleted_at, payment_method)')
+              .is('sales.deleted_at', null)
+              .neq('sales.payment_method', 'credit')
+              .gte('sales.created_at', monthStartStr)
+              .lte('sales.created_at', monthEndStr + 'T23:59:59')
               .range(monthOffset, monthOffset + monthBatchSize - 1);
-            
+
             if (!batch || batch.length === 0) break;
             allMonthSaleItems = allMonthSaleItems.concat(batch);
             if (batch.length < monthBatchSize) break;
