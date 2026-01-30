@@ -95,15 +95,28 @@ const Reports = () => {
       // Fetch sale items with product unit_cost for COGS
       let cogs = 0;
       if (saleIds.length > 0) {
-        const { data: saleItemsData } = await supabase
-          .from('sale_items')
-          .select('quantity, product_id, products(unit_cost)')
-          .in('sale_id', saleIds);
+        // Fetch ALL sale items (may exceed 1000 row default limit)
+        let allSaleItems: any[] = [];
+        let offset = 0;
+        const batchSize = 1000;
+        
+        while (true) {
+          const { data: batch } = await supabase
+            .from('sale_items')
+            .select('quantity, product_id, products(unit_cost)')
+            .in('sale_id', saleIds)
+            .range(offset, offset + batchSize - 1);
+          
+          if (!batch || batch.length === 0) break;
+          allSaleItems = allSaleItems.concat(batch);
+          if (batch.length < batchSize) break;
+          offset += batchSize;
+        }
 
-        cogs = saleItemsData?.reduce((sum, item: any) => {
+        cogs = allSaleItems.reduce((sum, item: any) => {
           const unitCost = Number(item.products?.unit_cost) || 0;
           return sum + (unitCost * item.quantity);
-        }, 0) || 0;
+        }, 0);
       }
 
       // Fetch credit payments - these count as revenue when payment is made
@@ -127,14 +140,27 @@ const Reports = () => {
           const creditSaleIdToSaleId = new Map(creditSalesInfo.map(cs => [cs.id, { saleId: cs.sale_id, total: cs.total_amount }]));
           const originalSaleIds = creditSalesInfo.map(cs => cs.sale_id);
 
-          const { data: creditSaleItems } = await supabase
-            .from('sale_items')
-            .select('sale_id, quantity, products(unit_cost)')
-            .in('sale_id', originalSaleIds);
+          // Fetch ALL credit sale items with pagination
+          let allCreditSaleItems: any[] = [];
+          let creditOffset = 0;
+          const creditBatchSize = 1000;
+          
+          while (true) {
+            const { data: batch } = await supabase
+              .from('sale_items')
+              .select('sale_id, quantity, products(unit_cost)')
+              .in('sale_id', originalSaleIds)
+              .range(creditOffset, creditOffset + creditBatchSize - 1);
+            
+            if (!batch || batch.length === 0) break;
+            allCreditSaleItems = allCreditSaleItems.concat(batch);
+            if (batch.length < creditBatchSize) break;
+            creditOffset += creditBatchSize;
+          }
 
           // Calculate total COGS per original sale
           const saleCogs = new Map<string, number>();
-          creditSaleItems?.forEach((item: any) => {
+          allCreditSaleItems.forEach((item: any) => {
             const unitCost = Number(item.products?.unit_cost) || 0;
             const itemCogs = unitCost * item.quantity;
             saleCogs.set(item.sale_id, (saleCogs.get(item.sale_id) || 0) + itemCogs);
@@ -261,18 +287,30 @@ const Reports = () => {
         const cashCardSales = mSales?.reduce((sum, s) => sum + Number(s.total), 0) || 0;
         const monthSaleIds = mSales?.map(s => s.id) || [];
 
-        // Calculate COGS for the month
+        // Calculate COGS for the month with pagination
         let monthCogs = 0;
         if (monthSaleIds.length > 0) {
-          const { data: monthSaleItems } = await supabase
-            .from('sale_items')
-            .select('quantity, products(unit_cost)')
-            .in('sale_id', monthSaleIds);
+          let allMonthSaleItems: any[] = [];
+          let monthOffset = 0;
+          const monthBatchSize = 1000;
+          
+          while (true) {
+            const { data: batch } = await supabase
+              .from('sale_items')
+              .select('quantity, products(unit_cost)')
+              .in('sale_id', monthSaleIds)
+              .range(monthOffset, monthOffset + monthBatchSize - 1);
+            
+            if (!batch || batch.length === 0) break;
+            allMonthSaleItems = allMonthSaleItems.concat(batch);
+            if (batch.length < monthBatchSize) break;
+            monthOffset += monthBatchSize;
+          }
 
-          monthCogs = monthSaleItems?.reduce((sum, item: any) => {
+          monthCogs = allMonthSaleItems.reduce((sum, item: any) => {
             const unitCost = Number(item.products?.unit_cost) || 0;
             return sum + (unitCost * item.quantity);
-          }, 0) || 0;
+          }, 0);
         }
 
         const { data: mCreditPayments } = await supabase
