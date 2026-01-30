@@ -113,10 +113,14 @@ const Reports = () => {
           offset += batchSize;
         }
 
+        console.log('COGS Debug - Total sale items fetched:', allSaleItems.length);
+        
         cogs = allSaleItems.reduce((sum, item: any) => {
           const unitCost = Number(item.products?.unit_cost) || 0;
           return sum + (unitCost * item.quantity);
         }, 0);
+        
+        console.log('COGS Debug - Calculated COGS:', cogs);
       }
 
       // Fetch credit payments - these count as revenue when payment is made
