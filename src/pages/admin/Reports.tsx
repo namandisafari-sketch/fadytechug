@@ -320,11 +320,70 @@ const Reports = () => {
           }, 0);
         }
 
+        // Credit payments for the month
         const { data: mCreditPayments } = await supabase
           .from('credit_payments')
-          .select('amount')
+          .select('amount, credit_sale_id')
           .gte('payment_date', monthStartStr)
           .lte('payment_date', monthEndStr + 'T23:59:59');
+
+        const creditPayments = mCreditPayments?.reduce((sum, p) => sum + Number(p.amount), 0) || 0;
+
+        // Proportional COGS for credit payments in this month
+        if (mCreditPayments && mCreditPayments.length > 0) {
+          const mcCreditSaleIds = [...new Set(mCreditPayments.map(p => p.credit_sale_id))];
+          const { data: mcCreditSalesInfo } = await supabase
+            .from('credit_sales')
+            .select('id, sale_id, total_amount')
+            .in('id', mcCreditSaleIds);
+
+          if (mcCreditSalesInfo && mcCreditSalesInfo.length > 0) {
+            const mcSaleIds = mcCreditSalesInfo.map(cs => cs.sale_id);
+            let allMcItems: any[] = [];
+            let mcOffset = 0;
+            while (true) {
+              const { data: batch } = await supabase
+                .from('sale_items')
+                .select('sale_id, quantity, products(unit_cost)')
+                .in('sale_id', mcSaleIds)
+                .range(mcOffset, mcOffset + 1000 - 1);
+              if (!batch || batch.length === 0) break;
+              allMcItems = allMcItems.concat(batch);
+              if (batch.length < 1000) break;
+              mcOffset += 1000;
+            }
+            const mcSaleCogs = new Map<string, number>();
+            allMcItems.forEach((item: any) => {
+              const unitCost = Number(item.products?.unit_cost) || 0;
+              mcSaleCogs.set(item.sale_id, (mcSaleCogs.get(item.sale_id) || 0) + unitCost * item.quantity);
+            });
+            const mcIdMap = new Map(mcCreditSalesInfo.map(cs => [cs.id, { saleId: cs.sale_id, total: cs.total_amount }]));
+            mCreditPayments.forEach(payment => {
+              const info = mcIdMap.get(payment.credit_sale_id);
+              if (info) {
+                const ratio = info.total > 0 ? Number(payment.amount) / info.total : 0;
+                monthCogs += (mcSaleCogs.get(info.saleId) || 0) * ratio;
+              }
+            });
+          }
+        }
+
+        // Refunds for the month
+        const { data: mRefunds } = await supabase
+          .from('refunds')
+          .select('amount')
+          .is('deleted_at', null)
+          .gte('created_at', monthStartStr)
+          .lte('created_at', monthEndStr + 'T23:59:59');
+        const monthRefunds = mRefunds?.reduce((sum, r) => sum + Number(r.amount), 0) || 0;
+
+        // Exchange refunds for the month
+        const { data: mExchanges } = await supabase
+          .from('exchanges')
+          .select('refund_given')
+          .gte('cash_date', monthStartStr)
+          .lte('cash_date', monthEndStr);
+        const monthExchangeRefunds = mExchanges?.reduce((sum, e) => sum + Number(e.refund_given || 0), 0) || 0;
 
         const { data: mExpenses } = await supabase
           .from('expenses')
@@ -332,15 +391,15 @@ const Reports = () => {
           .gte('expense_date', monthStartStr)
           .lte('expense_date', monthEndStr);
 
-        const creditPayments = mCreditPayments?.reduce((sum, p) => sum + Number(p.amount), 0) || 0;
         const revenue = cashCardSales + creditPayments;
         const expenses = mExpenses?.reduce((sum, e) => sum + Number(e.amount), 0) || 0;
-        const grossProfit = revenue - monthCogs;
+        const netRevenue = revenue - monthRefunds - monthExchangeRefunds;
+        const grossProfit = netRevenue - monthCogs;
         const netProfit = grossProfit - expenses;
 
         months.push({
           month: format(monthStart, 'MMM yyyy'),
-          revenue,
+          revenue: netRevenue,
           cogs: monthCogs,
           grossProfit,
           expenses,
