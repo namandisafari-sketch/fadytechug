@@ -431,18 +431,63 @@ const Reports = () => {
           <h1 className="text-3xl font-bold text-foreground">Financial Reports</h1>
           <p className="text-muted-foreground">Balance sheets, income statements, and financial analysis</p>
         </div>
-        <Select value={period} onValueChange={setPeriod}>
-          <SelectTrigger className="w-48">
-            <Calendar className="h-4 w-4 mr-2" />
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="current">This Month</SelectItem>
-            <SelectItem value="last">Last Month</SelectItem>
-            <SelectItem value="quarter">Last 3 Months</SelectItem>
-            <SelectItem value="year">This Year</SelectItem>
-          </SelectContent>
-        </Select>
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+          <Select value={period} onValueChange={setPeriod}>
+            <SelectTrigger className="w-full sm:w-48">
+              <CalendarIcon className="mr-2 h-4 w-4" />
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="current">This Month</SelectItem>
+              <SelectItem value="last">Last Month</SelectItem>
+              <SelectItem value="quarter">Last 3 Months</SelectItem>
+              <SelectItem value="year">This Year</SelectItem>
+              <SelectItem value="custom">Custom Range</SelectItem>
+            </SelectContent>
+          </Select>
+
+          {period === 'custom' && (
+            <>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button variant="outline" className="w-full justify-start text-left font-normal sm:w-[180px]">
+                    <CalendarIcon className="mr-2 h-4 w-4" />
+                    {format(customStartDate, 'PPP')}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="end">
+                  <Calendar
+                    mode="single"
+                    selected={customStartDate}
+                    onSelect={(date) => date && setCustomStartDate(date)}
+                    disabled={(date) => date > customEndDate}
+                    initialFocus
+                    className="p-3 pointer-events-auto"
+                  />
+                </PopoverContent>
+              </Popover>
+
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button variant="outline" className="w-full justify-start text-left font-normal sm:w-[180px]">
+                    <CalendarIcon className="mr-2 h-4 w-4" />
+                    {format(customEndDate, 'PPP')}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="end">
+                  <Calendar
+                    mode="single"
+                    selected={customEndDate}
+                    onSelect={(date) => date && setCustomEndDate(date)}
+                    disabled={(date) => date < customStartDate}
+                    initialFocus
+                    className="p-3 pointer-events-auto"
+                  />
+                </PopoverContent>
+              </Popover>
+            </>
+          )}
+        </div>
       </div>
 
       <Tabs defaultValue="income" className="space-y-6">
