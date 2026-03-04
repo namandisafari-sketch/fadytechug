@@ -8,6 +8,7 @@ import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { supabase } from '@/integrations/supabase/client';
 import { FileText, TrendingUp, TrendingDown, DollarSign, Calendar as CalendarIcon, Download, Package } from 'lucide-react';
+import { formatCurrency } from '@/lib/currency';
 import { format, startOfMonth, endOfMonth, subMonths } from 'date-fns';
 
 interface FinancialData {
@@ -32,6 +33,8 @@ interface MonthlyData {
 
 const Reports = () => {
   const [period, setPeriod] = useState('current');
+  const [customStartDate, setCustomStartDate] = useState<Date>(startOfMonth(new Date()));
+  const [customEndDate, setCustomEndDate] = useState<Date>(endOfMonth(new Date()));
   const [loading, setLoading] = useState(true);
   const [financialData, setFinancialData] = useState<FinancialData>({
     revenue: 0, refunds: 0, exchangeRefunds: 0, netRevenue: 0, cogs: 0, grossProfit: 0, expenses: 0, netProfit: 0
@@ -43,7 +46,7 @@ const Reports = () => {
 
   useEffect(() => {
     fetchReportData();
-  }, [period]);
+  }, [period, customStartDate, customEndDate]);
 
   const getDateRange = () => {
     const now = new Date();
@@ -65,6 +68,10 @@ const Reports = () => {
       case 'year':
         startDate = new Date(now.getFullYear(), 0, 1);
         endDate = new Date(now.getFullYear(), 11, 31);
+        break;
+      case 'custom':
+        startDate = customStartDate;
+        endDate = customEndDate < customStartDate ? customStartDate : customEndDate;
         break;
       default:
         startDate = startOfMonth(now);
