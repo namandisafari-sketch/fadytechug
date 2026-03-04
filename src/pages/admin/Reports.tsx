@@ -289,27 +289,26 @@ const Reports = () => {
         const cashCardSales = mSales?.reduce((sum, s) => sum + Number(s.total), 0) || 0;
         const monthSaleIds = mSales?.map(s => s.id) || [];
 
-        // Calculate COGS for the month with pagination and sales join filtering
+        // Calculate COGS for the month using batched sale IDs
         let monthCogs = 0;
         {
           let allMonthSaleItems: any[] = [];
-          let monthOffset = 0;
-          const monthBatchSize = 1000;
-
-          while (true) {
-            const { data: batch } = await supabase
-              .from('sale_items')
-              .select('quantity, products(unit_cost), sales!inner(created_at, deleted_at, payment_method)')
-              .is('sales.deleted_at', null)
-              .neq('sales.payment_method', 'credit')
-              .gte('sales.created_at', monthStartStr)
-              .lte('sales.created_at', monthEndStr + 'T23:59:59')
-              .range(monthOffset, monthOffset + monthBatchSize - 1);
-
-            if (!batch || batch.length === 0) break;
-            allMonthSaleItems = allMonthSaleItems.concat(batch);
-            if (batch.length < monthBatchSize) break;
-            monthOffset += monthBatchSize;
+          const idBatchSize = 200;
+          for (let i = 0; i < monthSaleIds.length; i += idBatchSize) {
+            const idBatch = monthSaleIds.slice(i, i + idBatchSize);
+            let monthOffset = 0;
+            const monthBatchSize = 1000;
+            while (true) {
+              const { data: batch } = await supabase
+                .from('sale_items')
+                .select('quantity, products(unit_cost)')
+                .in('sale_id', idBatch)
+                .range(monthOffset, monthOffset + monthBatchSize - 1);
+              if (!batch || batch.length === 0) break;
+              allMonthSaleItems = allMonthSaleItems.concat(batch);
+              if (batch.length < monthBatchSize) break;
+              monthOffset += monthBatchSize;
+            }
           }
 
           monthCogs = allMonthSaleItems.reduce((sum, item: any) => {
