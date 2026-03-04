@@ -93,28 +93,26 @@ const Reports = () => {
       const saleIds = salesData?.map(s => s.id) || [];
 
       // Fetch sale items with product unit_cost for COGS
-      // IMPORTANT: Avoid .in('sale_id', saleIds) because large ID lists can be truncated,
-      // and avoid the 1000-row default limit by paging.
+      // Use batched .in() queries with the already-fetched saleIds for reliability
       let cogs = 0;
       {
         let allSaleItems: any[] = [];
-        let offset = 0;
-        const batchSize = 1000;
-
-        while (true) {
-          const { data: batch } = await supabase
-            .from('sale_items')
-            .select('quantity, products(unit_cost), sales!inner(created_at, deleted_at, payment_method)')
-            .is('sales.deleted_at', null)
-            .neq('sales.payment_method', 'credit')
-            .gte('sales.created_at', startStr)
-            .lte('sales.created_at', endStr + 'T23:59:59')
-            .range(offset, offset + batchSize - 1);
-
-          if (!batch || batch.length === 0) break;
-          allSaleItems = allSaleItems.concat(batch);
-          if (batch.length < batchSize) break;
-          offset += batchSize;
+        const idBatchSize = 200; // batch sale IDs to avoid URL length limits
+        for (let i = 0; i < saleIds.length; i += idBatchSize) {
+          const idBatch = saleIds.slice(i, i + idBatchSize);
+          let offset = 0;
+          const rowBatchSize = 1000;
+          while (true) {
+            const { data: batch } = await supabase
+              .from('sale_items')
+              .select('quantity, products(unit_cost)')
+              .in('sale_id', idBatch)
+              .range(offset, offset + rowBatchSize - 1);
+            if (!batch || batch.length === 0) break;
+            allSaleItems = allSaleItems.concat(batch);
+            if (batch.length < rowBatchSize) break;
+            offset += rowBatchSize;
+          }
         }
 
         cogs = allSaleItems.reduce((sum, item: any) => {
@@ -291,27 +289,26 @@ const Reports = () => {
         const cashCardSales = mSales?.reduce((sum, s) => sum + Number(s.total), 0) || 0;
         const monthSaleIds = mSales?.map(s => s.id) || [];
 
-        // Calculate COGS for the month with pagination and sales join filtering
+        // Calculate COGS for the month using batched sale IDs
         let monthCogs = 0;
         {
           let allMonthSaleItems: any[] = [];
-          let monthOffset = 0;
-          const monthBatchSize = 1000;
-
-          while (true) {
-            const { data: batch } = await supabase
-              .from('sale_items')
-              .select('quantity, products(unit_cost), sales!inner(created_at, deleted_at, payment_method)')
-              .is('sales.deleted_at', null)
-              .neq('sales.payment_method', 'credit')
-              .gte('sales.created_at', monthStartStr)
-              .lte('sales.created_at', monthEndStr + 'T23:59:59')
-              .range(monthOffset, monthOffset + monthBatchSize - 1);
-
-            if (!batch || batch.length === 0) break;
-            allMonthSaleItems = allMonthSaleItems.concat(batch);
-            if (batch.length < monthBatchSize) break;
-            monthOffset += monthBatchSize;
+          const idBatchSize = 200;
+          for (let i = 0; i < monthSaleIds.length; i += idBatchSize) {
+            const idBatch = monthSaleIds.slice(i, i + idBatchSize);
+            let monthOffset = 0;
+            const monthBatchSize = 1000;
+            while (true) {
+              const { data: batch } = await supabase
+                .from('sale_items')
+                .select('quantity, products(unit_cost)')
+                .in('sale_id', idBatch)
+                .range(monthOffset, monthOffset + monthBatchSize - 1);
+              if (!batch || batch.length === 0) break;
+              allMonthSaleItems = allMonthSaleItems.concat(batch);
+              if (batch.length < monthBatchSize) break;
+              monthOffset += monthBatchSize;
+            }
           }
 
           monthCogs = allMonthSaleItems.reduce((sum, item: any) => {
